@@ -2766,7 +2766,7 @@
 
   function updateAutoCountdown(controls) {
     if (!controls.autoCountdown || !controls.autoTargetTime || !controls.autoEnabled) return;
-    controls.autoCountdown.textContent = `距21:00 ${formatCountdown(controls.autoTargetTime.getTime() - Date.now())}`;
+    controls.autoCountdown.textContent = `距21:00还有 ${formatCountdown(controls.autoTargetTime.getTime() - Date.now())}`;
     controls.autoCountdown.classList.add("active");
   }
 
