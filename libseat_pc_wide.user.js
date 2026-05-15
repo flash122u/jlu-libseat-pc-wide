@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.2
+// @version      1.17.3
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.2";
+  const SCRIPT_VERSION = "1.17.3";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -1138,6 +1138,19 @@
     } catch (error) {
       return false;
     }
+  }
+
+  function reserveConfigDefaults() {
+    const today = todayText();
+    const defaultEnd = minutesToTime(defaultEndMinutesForDate());
+    return {
+      manualSeat: "",
+      manualStart: minutesToTime(defaultStartMinutesForDate(today)),
+      manualEnd: defaultEnd,
+      autoSeat: "",
+      autoStart: minutesToTime(timeToMinutes(DAY_OPEN_TIME)),
+      autoEnd: defaultEnd,
+    };
   }
 
   function currentAuthorizationHeader() {
@@ -2748,6 +2761,37 @@
     setConfigStatus(controls, ok ? "常用配置已保存" : "保存失败");
   }
 
+  function clearReserveConfig(block, controls) {
+    let cleared = false;
+    try {
+      window.localStorage.removeItem(RESERVE_CONFIG_STORAGE_KEY);
+      cleared = true;
+    } catch (error) {
+      cleared = false;
+    }
+
+    const defaults = reserveConfigDefaults();
+    if (!controls.autoEnabled && !controls.busy) {
+      controls.manualSeat.value = defaults.manualSeat;
+      controls.manualStart.value = defaults.manualStart;
+      controls.manualEnd.value = defaults.manualEnd;
+      controls.autoSeat.value = defaults.autoSeat;
+      controls.autoStart.value = defaults.autoStart;
+      controls.autoEnd.value = defaults.autoEnd;
+      controls.manualTimeManuallyEdited = false;
+      controls.manualSlotSeatId = null;
+      controls.manualSlotSelect.value = "";
+      controls.manualSlotSelect.innerHTML = "";
+      window.clearTimeout(controls.manualSlotUpdateTimer);
+      controls.manualSlotUpdateTimer = null;
+      setManualSlotEmpty(controls, "输入座位号后读取时间段", false);
+      updateReserveButtonDetail(block, controls, true);
+      updateAutoReservationDetail(block, controls, true);
+    }
+
+    setConfigStatus(controls, cleared ? "常用配置已清空" : "清空失败");
+  }
+
   function updateAutoButtonState(controls) {
     if (!controls.autoButton) return;
     controls.autoButton.classList.toggle("active", !!controls.autoEnabled);
@@ -3322,6 +3366,7 @@
         <div class="libseat-time-replacement-title">预约座位</div>
         <div class="libseat-config-tools">
           <button class="libseat-config-button libseat-save-config-button" type="button">保存常用配置</button>
+          <button class="libseat-config-button libseat-clear-config-button" type="button" title="清空保存的常用配置">清空常用配置</button>
           <span class="libseat-config-status" aria-live="polite"></span>
         </div>
       </div>
@@ -3404,6 +3449,7 @@
       queryButton: wrapper.querySelector(".libseat-query-button"),
       queryStatus: wrapper.querySelector(".libseat-query-status"),
       configSaveButton: wrapper.querySelector(".libseat-save-config-button"),
+      configClearButton: wrapper.querySelector(".libseat-clear-config-button"),
       configStatus: wrapper.querySelector(".libseat-config-status"),
       manualSeat: wrapper.querySelector(".libseat-manual-seat-input"),
       manualSlotSelect: wrapper.querySelector(".libseat-manual-slot-select"),
@@ -3454,6 +3500,7 @@
     bindReserveSeatInput(controls.manualSeat);
     bindReserveSeatInput(controls.autoSeat);
     controls.configSaveButton.addEventListener("click", () => saveReserveConfig(controls));
+    controls.configClearButton.addEventListener("click", () => clearReserveConfig(block, controls));
     controls.queryButton.addEventListener("click", () => {
       refreshSeatMapFromQuery(block, controls);
     });
