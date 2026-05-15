@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.16.6
+// @version      1.16.7
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.16.6";
+  const SCRIPT_VERSION = "1.16.7";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
   const DEFAULT_MIN_RESERVATION_MINUTES = 30;
@@ -50,9 +50,9 @@
     "body > uni-app > uni-page > uni-page-wrapper > uni-page-body > uni-view > uni-view.paging > uni-view > uni-view";
   const PAGE_BRIDGE_SCRIPT_ID = "libseat-pc-wide-page-bridge";
   const css = `
-    @media screen and (min-width: 768px) {
+    @media screen and (min-width: 768px), screen and (hover: hover) and (pointer: fine) {
       :root {
-        --h5-shell-width: min(98vw, 1600px) !important;
+        --h5-shell-width: min(max(98vw, 1024px), 1600px) !important;
       }
 
       html,
@@ -323,8 +323,8 @@
         display: grid;
         grid-template-columns:
           64px
-          minmax(128px, 0.85fr)
-          minmax(112px, 0.62fr)
+          minmax(96px, 0.42fr)
+          minmax(180px, 0.82fr)
           minmax(82px, 0.45fr)
           minmax(82px, 0.45fr)
           auto
@@ -339,15 +339,14 @@
         box-sizing: border-box;
       }
 
-      .libseat-reserve-manual-row {
-        grid-template-columns:
-          64px
-          minmax(84px, 0.42fr)
-          minmax(190px, 1.05fr)
-          minmax(82px, 0.45fr)
-          minmax(82px, 0.45fr)
-          auto
-          minmax(240px, 1.2fr);
+      .libseat-reserve-query-row .libseat-time-field:first-of-type,
+      .libseat-reserve-auto-row .libseat-time-field:first-of-type {
+        grid-column: 2 / 4;
+      }
+
+      .libseat-reserve-query-row .libseat-reserve-spacer,
+      .libseat-reserve-auto-row .libseat-reserve-spacer {
+        display: none;
       }
 
       .libseat-reserve-auto-row {
@@ -586,7 +585,8 @@
       }
 
       .libseat-slot-empty.libseat-manual-slot-empty {
-        font-size: 12px;
+        padding: 0 6px;
+        font-size: 11px;
         white-space: nowrap;
       }
 
