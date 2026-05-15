@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.4
+// @version      1.17.5
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.4";
+  const SCRIPT_VERSION = "1.17.5";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -2019,6 +2019,38 @@
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
 
+  function normalizeTimeInputValue(value) {
+    const raw = String(value || "").trim();
+    if (isTimeText(raw)) return raw;
+
+    const digits = raw.replace(/\D/g, "");
+    if (!digits || digits.length > 4) return "";
+
+    const padded = digits.padStart(4, "0");
+    const hour = Number(padded.slice(0, 2));
+    const minute = Number(padded.slice(2));
+    if (hour > 23 || minute > 59) return "";
+
+    return `${padded.slice(0, 2)}:${padded.slice(2)}`;
+  }
+
+  function normalizeTimeInputWhenComplete(input) {
+    const raw = String(input.value || "").trim();
+    if (isTimeText(raw)) return;
+
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length !== 4) return;
+
+    const normalized = normalizeTimeInputValue(digits);
+    if (!normalized) return;
+    input.value = normalized;
+    try {
+      input.setSelectionRange(normalized.length, normalized.length);
+    } catch (error) {
+      // Some embedded inputs can reject selection updates.
+    }
+  }
+
   function timeToMinutes(value) {
     if (!value) return null;
     const match = String(value).match(/(\d{2}):(\d{2})/);
@@ -2668,12 +2700,17 @@
     nativeInput.addEventListener("focus", () => {
       const wrapper = nativeInput.closest(".libseat-time-replacement, .libseat-slot-replacement");
       if (wrapper) wrapper.dataset.libseatFocused = "1";
+      window.setTimeout(() => nativeInput.select(), 0);
     });
+    nativeInput.addEventListener("click", () => {
+      nativeInput.select();
+    });
+    nativeInput.addEventListener("input", () => normalizeTimeInputWhenComplete(nativeInput));
     nativeInput.addEventListener("blur", () => {
       const wrapper = nativeInput.closest(".libseat-time-replacement, .libseat-slot-replacement");
       if (wrapper) wrapper.dataset.libseatFocused = "";
-      const value = nativeInput.value.trim();
-      if (!isTimeText(value)) return;
+      const value = normalizeTimeInputValue(nativeInput.value);
+      if (!value) return;
       nativeInput.value = value;
       emitRangePickerChange(block, field, value);
     });
@@ -2689,12 +2726,17 @@
     nativeInput.addEventListener("focus", () => {
       const wrapper = nativeInput.closest(".libseat-time-replacement");
       if (wrapper) wrapper.dataset.libseatFocused = "1";
+      window.setTimeout(() => nativeInput.select(), 0);
     });
+    nativeInput.addEventListener("click", () => {
+      nativeInput.select();
+    });
+    nativeInput.addEventListener("input", () => normalizeTimeInputWhenComplete(nativeInput));
     nativeInput.addEventListener("blur", () => {
       const wrapper = nativeInput.closest(".libseat-time-replacement");
       if (wrapper) wrapper.dataset.libseatFocused = "";
-      const value = nativeInput.value.trim();
-      if (!isTimeText(value)) return;
+      const value = normalizeTimeInputValue(nativeInput.value);
+      if (!value) return;
       nativeInput.value = value;
     });
     nativeInput.addEventListener("keydown", (event) => {
