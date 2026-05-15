@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.0
+// @version      1.17.1
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.0";
+  const SCRIPT_VERSION = "1.17.1";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -382,7 +382,7 @@
         grid-template-columns:
           64px
           minmax(84px, 0.42fr)
-          minmax(172px, 0.92fr)
+          minmax(160px, 0.82fr)
           minmax(82px, 0.45fr)
           minmax(82px, 0.45fr)
           auto
@@ -641,7 +641,7 @@
 
       .libseat-manual-slot-select,
       .libseat-manual-slot-empty {
-        max-width: 168px;
+        max-width: 160px;
       }
 
       .libseat-slot-empty.libseat-manual-slot-empty {
@@ -1319,6 +1319,10 @@
     return {
       error: seats.length ? `当前地图没有找到座位号 ${raw}` : "还没有读取到当前座位地图",
     };
+  }
+
+  function isSeatMapNotReadyError(error) {
+    return String(error || "") === "还没有读取到当前座位地图";
   }
 
   function resolveSeatCandidates(value) {
@@ -2893,7 +2897,11 @@
       if (range.error) {
         setReserveStatus(controls, range.error, "error");
       } else if (controls.manualSeat.value.trim()) {
-        setReserveStatus(controls, resolved.error || "请输入座位号", "error");
+        if (isSeatMapNotReadyError(resolved.error)) {
+          setReserveStatus(controls, "正在读取当前座位地图", "");
+        } else {
+          setReserveStatus(controls, resolved.error || "请输入座位号", "error");
+        }
       } else {
         setReserveStatus(controls, "输入座位号和开始/结束时间后手动预约今天", "");
       }
@@ -2974,7 +2982,14 @@
 
     const resolved = resolveSingleSeatCandidate(controls.manualSeat.value);
     if (!resolved.seat) {
-      setManualSlotEmpty(controls, resolved.error || "请输入座位号", false);
+      if (isSeatMapNotReadyError(resolved.error)) {
+        setManualSlotEmpty(controls, "正在读取当前座位地图", true);
+        window.setTimeout(() => {
+          if (controls.manualSeat && controls.manualSeat.isConnected) updateManualSlotSelect(block, controls);
+        }, 700);
+      } else {
+        setManualSlotEmpty(controls, resolved.error || "请输入座位号", false);
+      }
       return;
     }
 
@@ -3017,7 +3032,11 @@
       if (range.error) {
         setAutoStatus(controls, range.error, "error");
       } else if (controls.autoSeat.value.trim()) {
-        setAutoStatus(controls, resolved.errors[0] || "请输入座位号", "error");
+        if (resolved.errors.some(isSeatMapNotReadyError)) {
+          setAutoStatus(controls, "正在读取当前座位地图", "");
+        } else {
+          setAutoStatus(controls, resolved.errors[0] || "请输入座位号", "error");
+        }
       } else {
         setAutoStatus(controls, "输入自动预约座位号和开始/结束时间；默认预约次日", "");
       }
