@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.16.5
+// @version      1.16.6
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.16.5";
+  const SCRIPT_VERSION = "1.16.6";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
   const DEFAULT_MIN_RESERVATION_MINUTES = 30;
@@ -42,6 +42,7 @@
   };
   const FACILITY_IMAGE_URLS = Object.keys(FACILITY_IMAGE_BY_TYPE).map((type) => FACILITY_IMAGE_BY_TYPE[type]);
   const userDetailCache = new Map();
+  let lastReadingRoomLabel = "";
   let replacementIndex = 0;
   let enhanceQueued = false;
   let seatMapLayoutQueued = false;
@@ -338,6 +339,17 @@
         box-sizing: border-box;
       }
 
+      .libseat-reserve-manual-row {
+        grid-template-columns:
+          64px
+          minmax(84px, 0.42fr)
+          minmax(190px, 1.05fr)
+          minmax(82px, 0.45fr)
+          minmax(82px, 0.45fr)
+          auto
+          minmax(240px, 1.2fr);
+      }
+
       .libseat-reserve-auto-row {
         align-items: center;
       }
@@ -570,7 +582,12 @@
 
       .libseat-manual-slot-select,
       .libseat-manual-slot-empty {
-        max-width: 118px;
+        max-width: none;
+      }
+
+      .libseat-slot-empty.libseat-manual-slot-empty {
+        font-size: 12px;
+        white-space: nowrap;
       }
 
       .libseat-slot-empty {
@@ -595,6 +612,7 @@
         position: fixed;
         inset: 0;
         z-index: 999999;
+        box-sizing: border-box;
       }
 
       .libseat-red-seat-mask {
@@ -605,15 +623,25 @@
 
       .libseat-red-seat-sheet {
         position: absolute;
+        top: 50%;
         left: 50%;
-        bottom: 0;
-        width: min(720px, 90vw);
-        max-height: min(76vh, 620px);
-        overflow: auto;
-        transform: translateX(-50%);
-        border-radius: 14px 14px 0 0;
+        bottom: auto;
+        width: min(640px, calc(100vw - 40px));
+        max-height: min(78vh, 560px);
+        overflow: hidden;
+        transform: translate(-50%, -50%);
+        border-radius: 10px;
         background: #fff;
-        box-shadow: 0 -16px 48px rgba(15, 23, 42, 0.22);
+        box-shadow: 0 16px 48px rgba(15, 23, 42, 0.24);
+        box-sizing: border-box;
+      }
+
+      .libseat-red-seat-modal .seat-modal-body {
+        width: 100% !important;
+        max-height: min(78vh, 560px);
+        overflow-x: hidden;
+        overflow-y: auto;
+        box-sizing: border-box;
       }
 
       .libseat-red-seat-head {
@@ -675,8 +703,8 @@
       .libseat-red-seat-modal .seat-reservation-item,
       .libseat-red-seat-empty {
         display: grid;
-        grid-template-columns: minmax(112px, 0.8fr) minmax(120px, 1fr) auto;
-        gap: 10px;
+        grid-template-columns: minmax(92px, 118px) minmax(0, 1fr) minmax(42px, 52px);
+        gap: 8px;
         align-items: center;
         min-height: 38px;
         padding: 9px 10px;
@@ -686,6 +714,8 @@
         color: #334155;
         font-size: 13px;
         box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
       }
 
       .libseat-red-seat-empty {
@@ -694,17 +724,23 @@
       }
 
       .libseat-red-seat-modal .seat-reservation-time {
+        min-width: 0;
         color: #111827;
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
 
       .libseat-red-seat-modal .seat-reservation-user {
+        min-width: 0;
         color: #334155;
+        overflow-wrap: anywhere;
       }
 
       .libseat-red-seat-modal .seat-reservation-status {
+        min-width: 0;
         color: #64748b;
         font-size: 12px;
+        white-space: nowrap;
       }
 
       .seat-pc.libseat-seat-in-use,
@@ -1382,6 +1418,26 @@
     const nickname = cleanReservationText(detail.nickname || detail.name || detail.realName);
     const code = cleanReservationText(detail.code || detail.studentCode || detail.username);
     return [nickname, code].filter(Boolean).join(" ") || fallback;
+  }
+
+  function reservationStatusText(status) {
+    const raw = cleanReservationText(status);
+    const normalized = raw.toUpperCase().replace(/[_-]+/g, " ");
+    if (normalized === "IN USE") return "使用中";
+    if (normalized === "TEMPORARY LEAVE") return "暂离";
+    return raw;
+  }
+
+  function reservationTimeText(reservation) {
+    if (!reservation || typeof reservation !== "object") return "";
+
+    const start = String(reservation.startTime || "").match(/(\d{2}:\d{2})/);
+    const end = String(reservation.endTime || "").match(/(\d{2}:\d{2})/);
+    if (start && end) return `${start[1]}-${end[1]}`;
+
+    const raw = cleanReservationText(reservation.time || "");
+    const times = raw.match(/\d{2}:\d{2}/g);
+    return times && times.length >= 2 ? `${times[0]}-${times[times.length - 1]}` : raw;
   }
 
   async function verifyActiveReservation(seatId, startTime, endTime) {
@@ -2070,9 +2126,9 @@
         const user = fallbackUser || (userId ? `用户 ${userId}` : "未知用户");
         return `
           <div class="seat-reservation-item">
-            <div class="seat-reservation-time">${escapeHtml(item.time || "")}</div>
+            <div class="seat-reservation-time">${escapeHtml(reservationTimeText(item))}</div>
             <div class="seat-reservation-user" data-libseat-user-id="${escapeHtml(userId)}">${escapeHtml(user)}</div>
-            <div class="seat-reservation-status">${escapeHtml(item.status || "")}</div>
+            <div class="seat-reservation-status">${escapeHtml(reservationStatusText(item.status))}</div>
           </div>
         `;
       })
@@ -2474,6 +2530,7 @@
   function syncReplacementInputs(block, controls) {
     if (controls.focused) return;
     if (controls.queryStart && controls.queryEnd) {
+      syncQueryRefreshStatus(controls);
       updateReserveButtonDetail(block, controls);
       updateAutoReservationDetail(block, controls);
       return;
@@ -2639,15 +2696,20 @@
     return parts[0] || text;
   }
 
-  function currentReadingRoomLabel() {
-    const box = document.querySelector(".seatBox-pc, .seatBox");
-    const snapshot = box ? pageSeatListSnapshot(box) : null;
+  function readingRoomLabelFromSnapshot(snapshot) {
     const readingRoom = snapshot && snapshot.readingRoom ? snapshot.readingRoom : {};
     return (
       compactReadingRoomLabel(readingRoom.parentNamePath) ||
-      compactReadingRoomLabel(readingRoom.name) ||
-      "当前阅览室"
+      compactReadingRoomLabel(readingRoom.name)
     );
+  }
+
+  function currentReadingRoomLabel() {
+    const box = document.querySelector(".seatBox-pc, .seatBox");
+    const snapshot = box ? pageSeatListSnapshot(box) : null;
+    const label = readingRoomLabelFromSnapshot(snapshot);
+    if (label) lastReadingRoomLabel = label;
+    return lastReadingRoomLabel || "当前阅览室";
   }
 
   function queryDateLabel(date) {
@@ -2659,6 +2721,11 @@
 
   function queryRefreshStatusText(range) {
     return `${currentReadingRoomLabel()}${range.startTime}-${range.endTime}座位表已刷新(${queryDateLabel(range.date)})`;
+  }
+
+  function syncQueryRefreshStatus(controls) {
+    if (!controls || !controls.lastQueryRange || controls.queryStatus.dataset.libseatTone !== "success") return;
+    controls.queryStatus.textContent = queryRefreshStatusText(controls.lastQueryRange);
   }
 
   function refreshSeatMapFromQuery(block, controls) {
@@ -2676,7 +2743,10 @@
       current.date !== range.date
     );
     controls.queryButton.title = `已刷新：${range.date} ${range.startTime}-${range.endTime}`;
+    controls.lastQueryRange = { date: range.date, startTime: range.startTime, endTime: range.endTime };
     setQueryStatus(controls, queryRefreshStatusText(range), "success");
+    window.setTimeout(() => syncQueryRefreshStatus(controls), 300);
+    window.setTimeout(() => syncQueryRefreshStatus(controls), 1200);
     queueManualSlotUpdate(block, controls, 250);
     return true;
   }
@@ -3468,7 +3538,6 @@
     wrapper.innerHTML = `
       <div class="libseat-time-replacement-head">
         <div class="libseat-time-replacement-title">可用时间段</div>
-        <div class="libseat-time-replacement-hint">今天从当前时间开始，明天 ${DAY_OPEN_TIME}-${DAY_CLOSE_TIME}</div>
       </div>
       <div class="libseat-slot-grid">
         <div class="libseat-time-field">
