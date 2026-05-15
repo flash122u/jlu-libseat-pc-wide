@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.16.0
+// @version      1.16.5
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.16.0";
+  const SCRIPT_VERSION = "1.16.5";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
   const DEFAULT_MIN_RESERVATION_MINUTES = 30;
@@ -25,6 +25,7 @@
   const RESERVATION_SUBMIT_PATH = "/v1/seat-applications";
   const ACTIVE_RESERVATIONS_PATH = "/v1/users/reservations/active";
   const SEAT_RESERVATIONS_BY_DATE_PREFIX = "/v1/seats";
+  const USER_DETAIL_PREFIX = "/v1/users";
   const DEFAULT_RESERVATION_RETRIES = 3;
   const DEFAULT_RESERVATION_RETRY_INTERVAL_MS = 500;
   const AUTO_RESERVATION_SUBMIT_MINUTES = 21 * 60;
@@ -40,6 +41,7 @@
     GATEWAY: "/static/images/seat/gateway.png",
   };
   const FACILITY_IMAGE_URLS = Object.keys(FACILITY_IMAGE_BY_TYPE).map((type) => FACILITY_IMAGE_BY_TYPE[type]);
+  const userDetailCache = new Map();
   let replacementIndex = 0;
   let enhanceQueued = false;
   let seatMapLayoutQueued = false;
@@ -177,6 +179,14 @@
         contain: paint !important;
       }
 
+      .seatClass-pc.libseat-seat-detail-clickable,
+      .seatClass.libseat-seat-detail-clickable,
+      .seatClass-pc.libseat-seat-detail-clickable .seat-pc,
+      .seatClass.libseat-seat-detail-clickable .seat {
+        pointer-events: auto !important;
+        cursor: pointer !important;
+      }
+
       .seatClass-pc .seat-pc:has(.seat-img),
       .seatClass .seat:has(.seat-img),
       .seat-pc.libseat-facility-cell,
@@ -251,6 +261,10 @@
         width: min(720px, 90vw) !important;
       }
 
+      .seat-reserve-modal .seat-info-section {
+        display: none !important;
+      }
+
       .function-item-image,
       .function-item-image > div,
       .function-item-image img {
@@ -306,6 +320,14 @@
 
       .libseat-reserve-row {
         display: grid;
+        grid-template-columns:
+          64px
+          minmax(128px, 0.85fr)
+          minmax(112px, 0.62fr)
+          minmax(82px, 0.45fr)
+          minmax(82px, 0.45fr)
+          auto
+          minmax(260px, 1.45fr);
         align-items: end;
         gap: 8px;
         min-height: 46px;
@@ -316,16 +338,7 @@
         box-sizing: border-box;
       }
 
-      .libseat-reserve-query-row {
-        grid-template-columns: 64px minmax(164px, 0.95fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(120px, 0.7fr) minmax(210px, 1.15fr);
-      }
-
-      .libseat-reserve-manual-row {
-        grid-template-columns: 64px minmax(140px, 0.85fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(260px, 1.6fr);
-      }
-
       .libseat-reserve-auto-row {
-        grid-template-columns: 64px minmax(140px, 0.85fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(260px, 1.6fr);
         align-items: center;
       }
 
@@ -340,6 +353,10 @@
       .libseat-reserve-submit {
         display: flex;
         align-items: end;
+      }
+
+      .libseat-reserve-spacer {
+        min-height: 34px;
       }
 
       .libseat-auto-button.active {
@@ -394,6 +411,7 @@
 
       .libseat-reserve-row .libseat-time-field input {
         height: 34px;
+        width: 100%;
         padding: 0 8px;
         font-size: 14px;
       }
@@ -431,22 +449,8 @@
         opacity: 0.62;
       }
 
-      .libseat-reserve-status {
-        min-height: 34px;
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        padding: 5px 9px;
-        border-radius: 6px;
-        box-sizing: border-box;
-        background: #f8fafc;
-        color: #475569;
-        font-size: 13px;
-        line-height: 1.35;
-        overflow: hidden;
-        overflow-wrap: anywhere;
-      }
-
+      .libseat-query-status,
+      .libseat-reserve-status,
       .libseat-auto-status {
         min-height: 34px;
         min-width: 0;
@@ -463,34 +467,30 @@
         overflow-wrap: anywhere;
       }
 
-      .libseat-reserve-status.success {
-        background: #ecfdf5;
-        color: #047857;
-      }
-
-      .libseat-reserve-status.warn {
-        background: #fffbeb;
-        color: #92400e;
-      }
-
-      .libseat-reserve-status.error {
-        background: #fef2f2;
-        color: #b91c1c;
-      }
-
+      .libseat-query-status.success,
+      .libseat-reserve-status.success,
       .libseat-auto-status.success {
         background: #ecfdf5;
         color: #047857;
       }
 
+      .libseat-query-status.warn,
+      .libseat-reserve-status.warn,
       .libseat-auto-status.warn {
         background: #fffbeb;
         color: #92400e;
       }
 
+      .libseat-query-status.error,
+      .libseat-reserve-status.error,
       .libseat-auto-status.error {
         background: #fef2f2;
         color: #b91c1c;
+      }
+
+      .libseat-query-status {
+        white-space: nowrap;
+        text-overflow: ellipsis;
       }
 
       .libseat-date-buttons {
@@ -568,8 +568,14 @@
         box-shadow: 0 0 0 2px rgba(101, 202, 253, 0.18);
       }
 
+      .libseat-manual-slot-select,
+      .libseat-manual-slot-empty {
+        max-width: 118px;
+      }
+
       .libseat-slot-empty {
         height: 34px;
+        width: 100%;
         display: flex;
         align-items: center;
         padding: 0 8px;
@@ -583,6 +589,122 @@
       .libseat-slot-empty.loading {
         background: #eef6ff;
         color: #075985;
+      }
+
+      .libseat-red-seat-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+      }
+
+      .libseat-red-seat-mask {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.36);
+      }
+
+      .libseat-red-seat-sheet {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: min(720px, 90vw);
+        max-height: min(76vh, 620px);
+        overflow: auto;
+        transform: translateX(-50%);
+        border-radius: 14px 14px 0 0;
+        background: #fff;
+        box-shadow: 0 -16px 48px rgba(15, 23, 42, 0.22);
+      }
+
+      .libseat-red-seat-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px 8px;
+      }
+
+      .libseat-red-seat-title {
+        min-width: 0;
+        color: #111827;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .libseat-red-seat-subtitle {
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 400;
+      }
+
+      .libseat-red-seat-close {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 auto;
+        border: 1px solid #d6dde8;
+        border-radius: 16px;
+        background: #fff;
+        color: #475569;
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .libseat-red-seat-body {
+        padding: 8px 18px 18px;
+      }
+
+      .libseat-red-seat-modal .seat-reservations-section {
+        margin-top: 0;
+      }
+
+      .libseat-red-seat-modal .seat-section-title {
+        margin-bottom: 8px;
+        color: #334155;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .libseat-red-seat-modal .seat-reservations-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .libseat-red-seat-modal .seat-reservation-item,
+      .libseat-red-seat-empty {
+        display: grid;
+        grid-template-columns: minmax(112px, 0.8fr) minmax(120px, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 38px;
+        padding: 9px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #334155;
+        font-size: 13px;
+        box-sizing: border-box;
+      }
+
+      .libseat-red-seat-empty {
+        display: flex;
+        color: #64748b;
+      }
+
+      .libseat-red-seat-modal .seat-reservation-time {
+        color: #111827;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .libseat-red-seat-modal .seat-reservation-user {
+        color: #334155;
+      }
+
+      .libseat-red-seat-modal .seat-reservation-status {
+        color: #64748b;
+        font-size: 12px;
       }
 
       .seat-pc.libseat-seat-in-use,
@@ -1055,17 +1177,6 @@
     if (!raw) return { error: "请输入座位号" };
 
     const seats = currentSeatSnapshot();
-    const idMatch = raw.match(/^(?:id[:：#]?|#)\s*(\d+)$/i);
-    if (idMatch) {
-      const id = Number(idMatch[1]);
-      const seat = seats.find((item) => Number(item.id) === id) || null;
-      return {
-        id,
-        seat,
-        label: seat ? String(seat.displayName || seat.name || id) : `ID ${id}`,
-      };
-    }
-
     const exact = seats.find(
       (item) =>
         String(item.displayName || "").trim() === raw ||
@@ -1091,19 +1202,10 @@
           label: String(seat.displayName || seat.name || seat.id),
         };
       }
-
-      const idSeat = seats.find((item) => Number(item.id) === Number(raw));
-      if (idSeat) {
-        return {
-          id: Number(idSeat.id),
-          seat: idSeat,
-          label: String(idSeat.displayName || idSeat.name || idSeat.id),
-        };
-      }
     }
 
     return {
-      error: seats.length ? `当前地图没有找到座位 ${raw}` : "还没有读取到当前座位地图",
+      error: seats.length ? `当前地图没有找到座位号 ${raw}` : "还没有读取到当前座位地图",
     };
   }
 
@@ -1126,6 +1228,19 @@
     });
 
     return { seats: resolved, errors };
+  }
+
+  function resolveSingleSeatCandidate(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return { seat: null, error: "请输入座位号" };
+
+    const candidates = parseSeatCandidates(raw);
+    if (candidates.length > 1) {
+      return { seat: null, error: "手动预约只能填写一个座位号" };
+    }
+
+    const seat = resolveSeatForReservation(raw);
+    return seat.error ? { seat: null, error: seat.error } : { seat, error: "" };
   }
 
   function reservationSeatObject(seat, submitData, verify) {
@@ -1225,6 +1340,50 @@
     });
   }
 
+  function userDetailPath(userId) {
+    return `${USER_DETAIL_PREFIX}/${encodeURIComponent(userId)}/detail`;
+  }
+
+  function fetchUserDetail(userId) {
+    const key = String(userId || "").trim();
+    if (!/^\d+$/.test(key)) return Promise.resolve(null);
+    if (userDetailCache.has(key)) return userDetailCache.get(key);
+
+    const request = fetchReservationJson(userDetailPath(key), {
+      method: "GET",
+      headers: reservationHeaders(false),
+      timeoutMs: 8000,
+    }).then((result) => {
+      if (!result.ok || !result.data || typeof result.data !== "object") {
+        userDetailCache.delete(key);
+        return null;
+      }
+      return result.data;
+    });
+
+    userDetailCache.set(key, request);
+    return request;
+  }
+
+  function reservationUserId(reservation) {
+    if (!reservation || typeof reservation !== "object") return "";
+    const candidates = [
+      reservation.userId,
+      reservation.userID,
+      reservation.user && typeof reservation.user === "object" ? reservation.user.id : null,
+      reservation.user && typeof reservation.user === "object" ? reservation.user.userId : null,
+    ];
+    const value = candidates.find((candidate) => candidate !== null && candidate !== undefined && candidate !== "");
+    return value === undefined ? "" : String(value);
+  }
+
+  function reservationUserDetailText(detail, fallback) {
+    if (!detail || typeof detail !== "object") return fallback;
+    const nickname = cleanReservationText(detail.nickname || detail.name || detail.realName);
+    const code = cleanReservationText(detail.code || detail.studentCode || detail.username);
+    return [nickname, code].filter(Boolean).join(" ") || fallback;
+  }
+
   async function verifyActiveReservation(seatId, startTime, endTime) {
     const result = await fetchReservationJson(ACTIVE_RESERVATIONS_PATH, {
       method: "GET",
@@ -1304,6 +1463,19 @@
           while (vm) {
             if (vm.timeRange && (vm.readingRoom || Array.isArray(vm.seatList) || vm.selectedSeat)) return vm;
             vm = vm.$parent;
+          }
+          return null;
+        }
+
+        function walkVue(root, visitor) {
+          var node = root;
+          while (node) {
+            var vm = node.__vue__;
+            while (vm) {
+              if (visitor(vm)) return vm;
+              vm = vm.$parent;
+            }
+            node = node.parentElement;
           }
           return null;
         }
@@ -1407,10 +1579,122 @@
           return null;
         }
 
+        function callSeatOpenMethod(vm, seat) {
+          if (!vm || !seat) return false;
+          var names = [
+            "selectSeat",
+            "chooseSeat",
+            "clickSeat",
+            "seatClick",
+            "handleSeatClick",
+            "onSeatClick",
+            "showSeat",
+            "showSeatDetail",
+            "openSeatDetail",
+            "openSeat",
+            "handleSelectSeat",
+            "onSelectSeat"
+          ];
+          for (var i = 0; i < names.length; i += 1) {
+            var fn = vm[names[i]];
+            if (typeof fn !== "function") continue;
+            try {
+              fn.call(vm, seat);
+              return true;
+            } catch (error) {}
+          }
+          return false;
+        }
+
+        function setReactive(vm, key, value) {
+          if (!vm) return false;
+          try {
+            if (typeof vm.$set === "function") {
+              vm.$set(vm, key, value);
+            } else {
+              vm[key] = value;
+            }
+            return true;
+          } catch (error) {
+            return false;
+          }
+        }
+
+        function assignIfPresent(vm, names, value) {
+          var changed = false;
+          for (var i = 0; i < names.length; i += 1) {
+            if (Object.prototype.hasOwnProperty.call(vm, names[i])) {
+              changed = setReactive(vm, names[i], value) || changed;
+            }
+          }
+          return changed;
+        }
+
+        function refreshSeatReservations(target) {
+          if (!target) return false;
+          if (typeof target.getSeatReservations === "function") {
+            setTimeout(function () {
+              try {
+                target.getSeatReservations();
+              } catch (error) {}
+            }, 0);
+            return true;
+          }
+          return false;
+        }
+
+        function openSeatDetail(root, seatId) {
+          var vm = findSeatListVm(root);
+          if (!vm || !Array.isArray(vm.seatList)) return false;
+          var seat = null;
+          for (var i = 0; i < vm.seatList.length; i += 1) {
+            if (Number(vm.seatList[i] && vm.seatList[i].id) === Number(seatId)) {
+              seat = vm.seatList[i];
+              break;
+            }
+          }
+          if (!seat) return false;
+
+          var context = findContextVm(vm) || vm;
+          if (callSeatOpenMethod(vm, seat) || callSeatOpenMethod(context, seat)) return true;
+
+          var modalVm = walkVue(document.body, function (candidate) {
+            return !!(candidate && candidate.timeRange && (candidate.seat || Array.isArray(candidate.reservations)));
+          });
+
+          var changed = false;
+          changed = setReactive(context, "selectedSeat", seat) || changed;
+          changed = assignIfPresent(context, ["seat", "currentSeat", "activeSeat"], seat) || changed;
+          if (modalVm) {
+            changed = assignIfPresent(modalVm, ["seat", "selectedSeat", "currentSeat", "activeSeat"], seat) || changed;
+            if (context.timeRange && modalVm.timeRange) {
+              changed = setReactive(modalVm, "timeRange", Object.assign({}, modalVm.timeRange, context.timeRange)) || changed;
+            }
+          }
+
+          var visibleNames = [
+            "showSeatReserveModal",
+            "seatReserveModalVisible",
+            "seatReserveVisible",
+            "showSeatReserve",
+            "showSeatModal",
+            "seatModalVisible",
+            "reserveModalVisible",
+            "showReserveModal"
+          ];
+          changed = assignIfPresent(context, visibleNames, true) || changed;
+          if (modalVm) changed = assignIfPresent(modalVm, visibleNames, true) || changed;
+          changed = refreshSeatReservations(modalVm) || refreshSeatReservations(context) || changed;
+          if (typeof context.$forceUpdate === "function") context.$forceUpdate();
+          if (modalVm && typeof modalVm.$forceUpdate === "function") modalVm.$forceUpdate();
+          return changed;
+        }
+
         window.__libseatPcWideBridge = {
           version: "${SCRIPT_VERSION}",
           snapshot: snapshot,
-          modalSnapshot: modalSnapshot
+          modalSnapshot: modalSnapshot,
+          openSeatDetail: openSeatDetail
         };
       })();
     `;
@@ -1694,6 +1978,194 @@
     }
   }
 
+  function enhanceReservationUserLabels() {
+    document
+      .querySelectorAll(".seat-reserve-modal .e-modal_show .seat-reservations-list")
+      .forEach((list) => {
+        const modalVm = findReservationModalVm(list);
+        if (!modalVm || !Array.isArray(modalVm.reservations)) return;
+
+        const labels = Array.from(list.querySelectorAll(".seat-reservation-user"));
+        labels.forEach((label, index) => {
+          const reservation = modalVm.reservations[index];
+          const userId = reservationUserId(reservation);
+          if (!userId) return;
+
+          const key = String(userId);
+          if (label.dataset.libseatUserDetailId === key && label.dataset.libseatUserDetailReady === "1") return;
+
+          const fallback = cleanReservationText(label.textContent || (reservation && reservation.user));
+          label.dataset.libseatUserDetailId = key;
+          label.dataset.libseatUserDetailReady = "0";
+
+          fetchUserDetail(key).then((detail) => {
+            if (!label.isConnected || label.dataset.libseatUserDetailId !== key) return;
+
+            const text = reservationUserDetailText(detail, fallback);
+            if (text) {
+              label.textContent = text;
+              label.setAttribute("title", text);
+            }
+            label.dataset.libseatUserDetailReady = detail ? "1" : "";
+          });
+        });
+      });
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function seatDetailDate() {
+    const box = document.querySelector(".seatBox-pc, .seatBox");
+    const snapshot = box ? pageSeatListSnapshot(box) : null;
+    return (snapshot && snapshot.timeRange && snapshot.timeRange.date) || todayText();
+  }
+
+  function clearNativeSeatReservations() {
+    const candidates = [
+      document.querySelector(".seat-reserve-modal"),
+      document.querySelector(".seat-reserve-modal .seat-modal-body"),
+      document.querySelector(".seat-reserve-modal .seat-reservations-list"),
+    ].filter(Boolean);
+    const seen = new Set();
+
+    candidates.forEach((node) => {
+      const vm = findReservationModalVm(node);
+      if (!vm || seen.has(vm)) return;
+      seen.add(vm);
+
+      if (typeof vm.$set === "function") {
+        vm.$set(vm, "reservations", []);
+      } else {
+        vm.reservations = [];
+      }
+      if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
+    });
+  }
+
+  function redSeatTitle(seat) {
+    const location = cleanReservationText(seat && seat.parentNamePath);
+    const name = cleanReservationText((seat && (seat.displayName || seat.name)) || "");
+    return [location, name].filter(Boolean).join(" ") || "座位详情";
+  }
+
+  function redSeatReservationRows(reservations) {
+    const activeReservations = Array.isArray(reservations)
+      ? reservations.filter((item) => item && item.status !== "CANCELLED")
+      : [];
+    if (!activeReservations.length) {
+      return `<div class="libseat-red-seat-empty">当前日期没有预约记录</div>`;
+    }
+
+    return activeReservations
+      .map((item) => {
+        const userId = reservationUserId(item);
+        const fallbackUser = cleanReservationText(item.user || "");
+        const user = fallbackUser || (userId ? `用户 ${userId}` : "未知用户");
+        return `
+          <div class="seat-reservation-item">
+            <div class="seat-reservation-time">${escapeHtml(item.time || "")}</div>
+            <div class="seat-reservation-user" data-libseat-user-id="${escapeHtml(userId)}">${escapeHtml(user)}</div>
+            <div class="seat-reservation-status">${escapeHtml(item.status || "")}</div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function hydrateRedSeatReservationUsers(modal) {
+    modal.querySelectorAll(".seat-reservation-user[data-libseat-user-id]").forEach((node) => {
+      const userId = node.dataset.libseatUserId;
+      if (!userId) return;
+
+      const fallback = cleanReservationText(node.textContent);
+      fetchUserDetail(userId).then((detail) => {
+        if (!node.isConnected) return;
+        const text = reservationUserDetailText(detail, fallback);
+        if (text) {
+          node.textContent = text;
+          node.setAttribute("title", text);
+        }
+      });
+    });
+  }
+
+  async function showRedSeatReservationModal(seat) {
+    const previous = document.querySelector(".libseat-red-seat-modal");
+    if (previous) previous.remove();
+
+    const date = seatDetailDate();
+    const modal = document.createElement("div");
+    modal.className = "seat-reserve-modal libseat-red-seat-modal";
+    modal.innerHTML = `
+      <div class="libseat-red-seat-mask"></div>
+      <div class="e-modal e-modal_show e-modal-action_animation libseat-red-seat-sheet" role="dialog" aria-modal="true">
+        <div class="seat-modal-body libseat-red-seat-body">
+          <div class="libseat-red-seat-head">
+            <div>
+              <div class="libseat-red-seat-title">${escapeHtml(redSeatTitle(seat))}</div>
+              <div class="libseat-red-seat-subtitle">${escapeHtml(queryDateLabel(date))} 当日预约记录</div>
+            </div>
+            <button class="libseat-red-seat-close" type="button" aria-label="关闭">×</button>
+          </div>
+          <div class="seat-reservations-section">
+            <div class="seat-section-title">当日预约记录</div>
+            <div class="seat-reservations-list">
+              <div class="libseat-red-seat-empty">正在读取预约记录</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const close = () => modal.remove();
+    modal.querySelector(".libseat-red-seat-mask").addEventListener("click", close);
+    modal.querySelector(".libseat-red-seat-close").addEventListener("click", close);
+    document.body.appendChild(modal);
+
+    const list = modal.querySelector(".seat-reservations-list");
+    const result = await fetchSeatReservationsByDate(seat.id, date);
+    if (!modal.isConnected) return;
+
+    if (!result.ok || !Array.isArray(result.data)) {
+      list.innerHTML = `<div class="libseat-red-seat-empty">读取失败：${escapeHtml(responseMessage(result))}</div>`;
+      return;
+    }
+
+    list.innerHTML = redSeatReservationRows(result.data);
+    hydrateRedSeatReservationUsers(modal);
+  }
+
+  function bindSeatDetailClick(node, seatElement, seat) {
+    node.classList.add("libseat-seat-detail-clickable");
+    node.dataset.libseatSeatId = String(seat.id);
+    if (node.dataset.libseatSeatDetailClickBound === "1") return;
+
+    node.dataset.libseatSeatDetailClickBound = "1";
+    node.addEventListener(
+      "click",
+      (event) => {
+        if (node.classList.contains("libseat-facility-class")) return;
+        const currentSeatElement = node.querySelector(".seat-pc, .seat") || seatElement;
+        if (!currentSeatElement) return;
+
+        clearNativeSeatReservations();
+        if (!currentSeatElement.classList.contains("libseat-seat-in-use")) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        showRedSeatReservationModal(seat);
+      },
+      true
+    );
+  }
+
   function dateTextFromValue(value) {
     const match = String(value || "").match(/\d{4}-\d{2}-\d{2}/);
     return match ? match[0] : "";
@@ -1894,6 +2366,7 @@
 
         clearSeatAvailabilityClasses(seatElement);
         seatElement.classList.add(seatAvailabilityClass(seat, context));
+        bindSeatDetailClick(node, seatElement, seat);
       });
     });
   }
@@ -2036,7 +2509,6 @@
       const value = button.dataset.date;
       controls.date = value;
       updateDateButtons(controls, value);
-      queueReserveSlotUpdate(block, controls, 0);
     });
   }
 
@@ -2101,6 +2573,14 @@
     if (tone) controls.status.classList.add(tone);
   }
 
+  function setQueryStatus(controls, text, tone) {
+    controls.queryStatus.textContent = text;
+    controls.queryStatus.title = text;
+    controls.queryStatus.classList.remove("success", "warn", "error");
+    controls.queryStatus.dataset.libseatTone = tone || "";
+    if (tone) controls.queryStatus.classList.add(tone);
+  }
+
   function setAutoStatus(controls, text, tone) {
     controls.autoStatus.textContent = text;
     controls.autoStatus.classList.remove("success", "warn", "error");
@@ -2150,10 +2630,42 @@
     );
   }
 
+  function compactReadingRoomLabel(value) {
+    const text = cleanReservationText(value);
+    if (!text) return "";
+
+    const parts = text.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && /楼/.test(parts[1])) return `${parts[0]}${parts[1]}`;
+    return parts[0] || text;
+  }
+
+  function currentReadingRoomLabel() {
+    const box = document.querySelector(".seatBox-pc, .seatBox");
+    const snapshot = box ? pageSeatListSnapshot(box) : null;
+    const readingRoom = snapshot && snapshot.readingRoom ? snapshot.readingRoom : {};
+    return (
+      compactReadingRoomLabel(readingRoom.parentNamePath) ||
+      compactReadingRoomLabel(readingRoom.name) ||
+      "当前阅览室"
+    );
+  }
+
+  function queryDateLabel(date) {
+    const shortDate = String(date || "").slice(5);
+    if (date === todayText()) return `今天${shortDate}`;
+    if (date === tomorrowText()) return `明天${shortDate}`;
+    return String(date || "");
+  }
+
+  function queryRefreshStatusText(range) {
+    return `${currentReadingRoomLabel()}${range.startTime}-${range.endTime}座位表已刷新(${queryDateLabel(range.date)})`;
+  }
+
   function refreshSeatMapFromQuery(block, controls) {
     const range = queryRangeFromControls(block, controls);
     if (range.error) {
-      setReserveSlotEmpty(controls, range.error, false);
+      controls.queryButton.title = range.error;
+      setQueryStatus(controls, range.error, "error");
       return false;
     }
 
@@ -2163,6 +2675,9 @@
       { date: range.date, startTime: range.startTime, endTime: range.endTime },
       current.date !== range.date
     );
+    controls.queryButton.title = `已刷新：${range.date} ${range.startTime}-${range.endTime}`;
+    setQueryStatus(controls, queryRefreshStatusText(range), "success");
+    queueManualSlotUpdate(block, controls, 250);
     return true;
   }
 
@@ -2170,28 +2685,125 @@
     if (controls.busy) return;
 
     const range = manualRangeFromControls(block, controls);
-    const resolved = resolveSeatCandidates(controls.manualSeat.value);
+    const resolved = resolveSingleSeatCandidate(controls.manualSeat.value);
     const canUpdateStatus = force || !controls.status.dataset.libseatTone;
-    if (range.error || !resolved.seats.length) {
+    if (range.error || !resolved.seat) {
       controls.button.removeAttribute("title");
       controls.button.setAttribute("aria-label", "手动预约");
       if (!canUpdateStatus) return;
       if (range.error) {
         setReserveStatus(controls, range.error, "error");
       } else if (controls.manualSeat.value.trim()) {
-        setReserveStatus(controls, resolved.errors[0] || "请输入座位号", "error");
+        setReserveStatus(controls, resolved.error || "请输入座位号", "error");
       } else {
         setReserveStatus(controls, "输入座位号和开始/结束时间后手动预约今天", "");
       }
       return;
     }
 
-    const detail = reservationCandidatesDetailText(resolved.seats, range);
+    const detail = reservationDetailText(resolved.seat, range);
     controls.button.title = detail;
     controls.button.setAttribute("aria-label", `手动预约：${detail}`);
     if (canUpdateStatus) {
       setReserveStatus(controls, `将预约：${detail}`, "");
     }
+  }
+
+  function setManualSlotEmpty(controls, text, loading) {
+    controls.manualSlotSelect.style.display = "none";
+    controls.manualSlotEmpty.style.display = "flex";
+    controls.manualSlotEmpty.classList.toggle("loading", !!loading);
+    controls.manualSlotEmpty.textContent = text;
+  }
+
+  function applyManualSlot(block, controls) {
+    if (!controls.manualSlotSelect.value) return;
+
+    const [startTime, endTime] = controls.manualSlotSelect.value.split("|");
+    controls.applyingManualSlot = true;
+    controls.manualStart.value = startTime;
+    controls.manualEnd.value = endTime;
+    controls.applyingManualSlot = false;
+    updateReserveButtonDetail(block, controls, true);
+  }
+
+  function renderManualSlots(block, controls, seat, slots) {
+    const previous = controls.manualSlotSelect.value;
+    controls.manualSlotSelect.innerHTML = "";
+
+    if (!slots.length) {
+      setManualSlotEmpty(controls, `${seat.label} 今天没有可预约时间段`, false);
+      return;
+    }
+
+    controls.manualSlotSelect.style.display = "";
+    controls.manualSlotEmpty.style.display = "none";
+    controls.manualSlotEmpty.classList.remove("loading");
+
+    slots.forEach((slot) => {
+      const option = document.createElement("option");
+      option.value = slotValue(slot);
+      option.textContent = `${minutesToTime(slot.start)} - ${minutesToTime(slot.end)}`;
+      controls.manualSlotSelect.appendChild(option);
+    });
+
+    const selected = Array.from(controls.manualSlotSelect.options).some((option) => option.value === previous)
+      ? previous
+      : controls.manualSlotSelect.options[0].value;
+    controls.manualSlotSelect.value = selected;
+    if (
+      !controls.manualTimeManuallyEdited &&
+      (selected !== previous || controls.manualSlotSeatId !== Number(seat.id))
+    ) {
+      controls.manualSlotSeatId = Number(seat.id);
+      applyManualSlot(block, controls);
+    } else {
+      controls.manualSlotSeatId = Number(seat.id);
+    }
+  }
+
+  async function updateManualSlotSelect(block, controls) {
+    if (!controls.manualSlotSelect || !controls.manualSlotEmpty) return;
+
+    const requestId = (controls.manualSlotRequestId || 0) + 1;
+    controls.manualSlotRequestId = requestId;
+
+    if (!controls.manualSeat.value.trim()) {
+      setManualSlotEmpty(controls, "输入座位号后读取时间段", false);
+      return;
+    }
+
+    const resolved = resolveSingleSeatCandidate(controls.manualSeat.value);
+    if (!resolved.seat) {
+      setManualSlotEmpty(controls, resolved.error || "请输入座位号", false);
+      return;
+    }
+
+    const date = todayText();
+    const rule = currentReservationRule();
+    const optimisticSlots = availableSlotsFromSeat(resolved.seat.seat, date, rule);
+    if (optimisticSlots.length) {
+      renderManualSlots(block, controls, resolved.seat, optimisticSlots);
+    } else {
+      setManualSlotEmpty(controls, `正在读取 ${resolved.seat.label} 预约情况`, true);
+    }
+
+    const result = await fetchSeatReservationsByDate(resolved.seat.id, date);
+    if (controls.manualSlotRequestId !== requestId) return;
+
+    if (!result.ok || !Array.isArray(result.data)) {
+      if (!optimisticSlots.length) {
+        setManualSlotEmpty(controls, `读取失败：${responseMessage(result)}`, false);
+      }
+      return;
+    }
+
+    renderManualSlots(block, controls, resolved.seat, availableSlots({ reservations: result.data, rule }, date));
+  }
+
+  function queueManualSlotUpdate(block, controls, delay) {
+    window.clearTimeout(controls.manualSlotUpdateTimer);
+    controls.manualSlotUpdateTimer = window.setTimeout(() => updateManualSlotSelect(block, controls), delay);
   }
 
   function updateAutoReservationDetail(block, controls, force) {
@@ -2218,102 +2830,6 @@
     if (canUpdateStatus) {
       setAutoStatus(controls, `将自动预约：${detail}`, "");
     }
-  }
-
-  function currentReservationDate(block, controls) {
-    return String(controls.date || "").trim();
-  }
-
-  function setReserveSlotEmpty(controls, text, loading) {
-    controls.slotSelect.style.display = "none";
-    controls.slotEmpty.style.display = "flex";
-    controls.slotEmpty.classList.toggle("loading", !!loading);
-    controls.slotEmpty.textContent = text;
-  }
-
-  function applyReserveSlot(block, controls) {
-    if (!controls.slotSelect.value) return;
-
-    const [startTime, endTime] = controls.slotSelect.value.split("|");
-    controls.applyingSlot = true;
-    controls.queryStart.value = startTime;
-    controls.queryEnd.value = endTime;
-    controls.applyingSlot = false;
-    refreshSeatMapFromQuery(block, controls);
-  }
-
-  function renderReserveSlots(block, controls, seat, slots) {
-    const previous = controls.slotSelect.value;
-    controls.slotSelect.innerHTML = "";
-
-    if (!slots.length) {
-      setReserveSlotEmpty(controls, `${seat.label} 当前日期没有可预约时间段`, false);
-      return;
-    }
-
-    controls.slotSelect.style.display = "";
-    controls.slotEmpty.style.display = "none";
-    controls.slotEmpty.classList.remove("loading");
-
-    slots.forEach((slot) => {
-      const option = document.createElement("option");
-      option.value = slotValue(slot);
-      option.textContent = `${seat.label} ${minutesToTime(slot.start)} - ${minutesToTime(slot.end)}`;
-      controls.slotSelect.appendChild(option);
-    });
-
-    const selected = Array.from(controls.slotSelect.options).some((option) => option.value === previous)
-      ? previous
-      : controls.slotSelect.options[0].value;
-    controls.slotSelect.value = selected;
-    if (!controls.queryTimeManuallyEdited && (selected !== previous || controls.querySlotSeatId !== Number(seat.id))) {
-      controls.querySlotSeatId = Number(seat.id);
-      applyReserveSlot(block, controls);
-    } else {
-      controls.querySlotSeatId = Number(seat.id);
-    }
-  }
-
-  async function updateReserveSlotSelect(block, controls) {
-    const requestId = (controls.slotRequestId || 0) + 1;
-    controls.slotRequestId = requestId;
-
-    const date = currentReservationDate(block, controls);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setReserveSlotEmpty(controls, "日期格式不正确", false);
-      return;
-    }
-
-    const resolved = resolveSeatCandidates(controls.querySeat.value);
-    const seat = resolved.seats[0];
-    if (!seat) {
-      setReserveSlotEmpty(controls, resolved.errors[0] || "请输入座位号", false);
-      return;
-    }
-    const rule = currentReservationRule();
-    const optimisticSlots = availableSlotsFromSeat(seat.seat, date, rule);
-    if (optimisticSlots.length) {
-      renderReserveSlots(block, controls, seat, optimisticSlots);
-    } else {
-      setReserveSlotEmpty(controls, `正在读取 ${seat.label} 预约情况`, true);
-    }
-
-    const result = await fetchSeatReservationsByDate(seat.id, date);
-    if (controls.slotRequestId !== requestId) return;
-
-    if (!result.ok || !Array.isArray(result.data)) {
-      if (!optimisticSlots.length) {
-        setReserveSlotEmpty(controls, `读取失败：${responseMessage(result)}`, false);
-      }
-      return;
-    }
-
-    renderReserveSlots(block, controls, seat, availableSlots({ reservations: result.data, rule }, date));
-  }
-
-  function queueReserveSlotUpdate(block, controls, delay) {
-    window.clearTimeout(controls.slotUpdateTimer);
-    controls.slotUpdateTimer = window.setTimeout(() => updateReserveSlotSelect(block, controls), delay);
   }
 
   function submitSuccessStatusText(submitData, seat, range, verify) {
@@ -2502,9 +3018,9 @@
       return;
     }
 
-    const resolved = resolveSeatCandidates(controls.manualSeat.value);
-    if (!resolved.seats.length) {
-      setReserveStatus(controls, resolved.errors[0] || "请输入座位号", "error");
+    const resolved = resolveSingleSeatCandidate(controls.manualSeat.value);
+    if (!resolved.seat) {
+      setReserveStatus(controls, resolved.error || "请输入座位号", "error");
       return;
     }
 
@@ -2517,10 +3033,10 @@
     controls.button.disabled = true;
     controls.autoButton.disabled = true;
     controls.button.textContent = "提交中";
-    setReserveStatus(controls, `准备预约：${reservationCandidatesDetailText(resolved.seats, range)}`, "warn");
+    setReserveStatus(controls, `准备预约：${reservationDetailText(resolved.seat, range)}`, "warn");
 
     try {
-      const result = await submitResolvedSeatsWithRetries(resolved.seats, range, (message, tone) =>
+      const result = await submitResolvedSeatsWithRetries([resolved.seat], range, (message, tone) =>
         setReserveStatus(controls, message, tone)
       );
       setReserveStatus(controls, result.message, result.tone);
@@ -2563,8 +3079,7 @@
     const index = ++replacementIndex;
     const queryStartId = `libseat-query-start-input-${index}`;
     const queryEndId = `libseat-query-end-input-${index}`;
-    const querySeatId = `libseat-query-seat-input-${index}`;
-    const reserveSlotId = `libseat-reserve-slot-select-${index}`;
+    const manualSlotId = `libseat-manual-slot-select-${index}`;
     const manualStartId = `libseat-manual-start-input-${index}`;
     const manualEndId = `libseat-manual-end-input-${index}`;
     const manualSeatId = `libseat-manual-seat-input-${index}`;
@@ -2587,6 +3102,7 @@
               <button class="libseat-date-button libseat-tomorrow-button" type="button" data-date="${tomorrow}">明天 ${tomorrow.slice(5)}</button>
             </div>
           </div>
+          <div class="libseat-reserve-spacer" aria-hidden="true"></div>
           <div class="libseat-time-field">
             <label for="${queryStartId}">开始</label>
             <input id="${queryStartId}" name="libseat_query_start_${index}" class="libseat-query-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="查询开始时间">
@@ -2596,21 +3112,18 @@
             <input id="${queryEndId}" name="libseat_query_end_${index}" class="libseat-query-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="查询结束时间">
           </div>
           <button class="libseat-reserve-button libseat-query-button" type="button">刷新地图</button>
-          <div class="libseat-time-field">
-            <label for="${querySeatId}">座位</label>
-            <input id="${querySeatId}" name="libseat_query_seat_${index}" class="libseat-query-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62" aria-label="查询座位号">
-          </div>
-          <div class="libseat-time-field">
-            <label for="${reserveSlotId}">可预约时间段</label>
-            <select id="${reserveSlotId}" name="libseat_reserve_slot_${index}" class="libseat-slot-select" aria-label="可预约时间段"></select>
-            <div class="libseat-slot-empty" style="display:none;">输入座位号后读取时间段</div>
-          </div>
+          <div class="libseat-query-status" aria-live="polite">选择日期和时间后刷新座位表</div>
         </div>
         <div class="libseat-reserve-row libseat-reserve-manual-row">
           <div class="libseat-reserve-row-title">手动预约</div>
           <div class="libseat-time-field">
             <label for="${manualSeatId}">座位</label>
-            <input id="${manualSeatId}" name="libseat_manual_seat_${index}" class="libseat-manual-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63 或 id:44" aria-label="手动预约座位号">
+            <input id="${manualSeatId}" name="libseat_manual_seat_${index}" class="libseat-manual-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62" aria-label="手动预约座位号">
+          </div>
+          <div class="libseat-time-field">
+            <label for="${manualSlotId}">时间段</label>
+            <select id="${manualSlotId}" name="libseat_manual_slot_${index}" class="libseat-slot-select libseat-manual-slot-select" aria-label="手动预约可用时间段"></select>
+            <div class="libseat-slot-empty libseat-manual-slot-empty" style="display:none;">输入座位号后读取时间段</div>
           </div>
           <div class="libseat-time-field">
             <label for="${manualStartId}">开始</label>
@@ -2629,8 +3142,9 @@
           <div class="libseat-reserve-row-title">自动预约</div>
           <div class="libseat-time-field">
             <label for="${autoSeatId}">座位</label>
-            <input id="${autoSeatId}" name="libseat_auto_seat_${index}" class="libseat-auto-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63 或 id:44" aria-label="自动预约座位号">
+            <input id="${autoSeatId}" name="libseat_auto_seat_${index}" class="libseat-auto-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63" aria-label="自动预约座位号">
           </div>
+          <div class="libseat-reserve-spacer" aria-hidden="true"></div>
           <div class="libseat-time-field">
             <label for="${autoStartId}">开始</label>
             <input id="${autoStartId}" name="libseat_auto_start_${index}" class="libseat-auto-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="自动预约开始时间">
@@ -2651,11 +3165,11 @@
       tomorrowButton: wrapper.querySelector(".libseat-tomorrow-button"),
       queryStart: wrapper.querySelector(".libseat-query-start-input"),
       queryEnd: wrapper.querySelector(".libseat-query-end-input"),
-      querySeat: wrapper.querySelector(".libseat-query-seat-input"),
       queryButton: wrapper.querySelector(".libseat-query-button"),
-      slotSelect: wrapper.querySelector(".libseat-slot-select"),
-      slotEmpty: wrapper.querySelector(".libseat-slot-empty"),
+      queryStatus: wrapper.querySelector(".libseat-query-status"),
       manualSeat: wrapper.querySelector(".libseat-manual-seat-input"),
+      manualSlotSelect: wrapper.querySelector(".libseat-manual-slot-select"),
+      manualSlotEmpty: wrapper.querySelector(".libseat-manual-slot-empty"),
       manualStart: wrapper.querySelector(".libseat-manual-start-input"),
       manualEnd: wrapper.querySelector(".libseat-manual-end-input"),
       button: wrapper.querySelector(".libseat-submit-button"),
@@ -2668,11 +3182,11 @@
       busy: false,
       autoEnabled: false,
       autoTimer: null,
-      slotUpdateTimer: null,
-      slotRequestId: 0,
-      querySlotSeatId: null,
-      queryTimeManuallyEdited: false,
-      applyingSlot: false,
+      manualSlotUpdateTimer: null,
+      manualSlotRequestId: 0,
+      manualSlotSeatId: null,
+      manualTimeManuallyEdited: false,
+      applyingManualSlot: false,
       get focused() {
         return wrapper.dataset.libseatFocused === "1";
       },
@@ -2684,6 +3198,7 @@
     controls.manualEnd.value = manualEndValue;
     controls.autoStart.value = autoStartValue;
     controls.autoEnd.value = autoEndValue;
+    setManualSlotEmpty(controls, "输入座位号后读取时间段", false);
     updateDateButtons(controls, dateValue);
     bindReserveQueryDateButton(block, controls, controls.todayButton);
     bindReserveQueryDateButton(block, controls, controls.tomorrowButton);
@@ -2693,28 +3208,16 @@
     bindReserveTimeInput(controls.manualEnd);
     bindReserveTimeInput(controls.autoStart);
     bindReserveTimeInput(controls.autoEnd);
-    bindReserveSeatInput(controls.querySeat);
     bindReserveSeatInput(controls.manualSeat);
     bindReserveSeatInput(controls.autoSeat);
-    setReserveSlotEmpty(controls, "输入座位号后读取时间段", false);
     controls.queryButton.addEventListener("click", () => {
       refreshSeatMapFromQuery(block, controls);
-      queueReserveSlotUpdate(block, controls, 0);
-    });
-    controls.querySeat.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      refreshSeatMapFromQuery(block, controls);
-      queueReserveSlotUpdate(block, controls, 0);
-    });
-    controls.querySeat.addEventListener("input", () => {
-      queueReserveSlotUpdate(block, controls, 350);
     });
     controls.queryStart.addEventListener("input", () => {
-      if (!controls.applyingSlot) controls.queryTimeManuallyEdited = true;
+      controls.queryButton.removeAttribute("title");
     });
     controls.queryEnd.addEventListener("input", () => {
-      if (!controls.applyingSlot) controls.queryTimeManuallyEdited = true;
+      controls.queryButton.removeAttribute("title");
     });
     controls.queryStart.addEventListener("blur", () => {
       refreshSeatMapFromQuery(block, controls);
@@ -2728,12 +3231,18 @@
       runSeatReservation(block, controls);
     });
     controls.manualSeat.addEventListener("input", () => {
+      controls.manualTimeManuallyEdited = false;
+      updateReserveButtonDetail(block, controls, true);
+      queueManualSlotUpdate(block, controls, 350);
+    });
+    controls.manualSlotSelect.addEventListener("change", () => applyManualSlot(block, controls));
+    controls.manualStart.addEventListener("input", () => {
+      if (!controls.applyingManualSlot) controls.manualTimeManuallyEdited = true;
       updateReserveButtonDetail(block, controls, true);
     });
-    controls.manualStart.addEventListener("input", () => updateReserveButtonDetail(block, controls, true));
-    controls.manualEnd.addEventListener("input", () => updateReserveButtonDetail(block, controls, true));
-    controls.slotSelect.addEventListener("change", () => {
-      applyReserveSlot(block, controls);
+    controls.manualEnd.addEventListener("input", () => {
+      if (!controls.applyingManualSlot) controls.manualTimeManuallyEdited = true;
+      updateReserveButtonDetail(block, controls, true);
     });
     controls.todayButton.addEventListener("click", () => {
       setTimeout(() => refreshSeatMapFromQuery(block, controls), 0);
@@ -2741,8 +3250,14 @@
     controls.tomorrowButton.addEventListener("click", () => {
       setTimeout(() => refreshSeatMapFromQuery(block, controls), 0);
     });
-    controls.manualStart.addEventListener("blur", () => updateReserveButtonDetail(block, controls, true));
-    controls.manualEnd.addEventListener("blur", () => updateReserveButtonDetail(block, controls, true));
+    controls.manualStart.addEventListener("blur", () => {
+      updateReserveButtonDetail(block, controls, true);
+      queueManualSlotUpdate(block, controls, 0);
+    });
+    controls.manualEnd.addEventListener("blur", () => {
+      updateReserveButtonDetail(block, controls, true);
+      queueManualSlotUpdate(block, controls, 0);
+    });
     controls.autoSeat.addEventListener("input", () => updateAutoReservationDetail(block, controls, true));
     controls.autoSeat.addEventListener("blur", () => {
       if (controls.autoEnabled) setAutoReserveEnabled(block, controls, true);
@@ -3045,6 +3560,7 @@
     queueClassifySeatMap();
     replaceSeatLegend();
     enhanceTimePickers();
+    enhanceReservationUserLabels();
   }
 
   function queueEnhancePage() {
