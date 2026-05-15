@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.6
+// @version      1.17.7
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.6";
+  const SCRIPT_VERSION = "1.17.7";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -1231,8 +1231,18 @@
     }
   }
 
+  function isDateText(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+  }
+
+  function isDateTimeText(value) {
+    return /^\d{4}-\d{2}-\d{2}\s+([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+  }
+
   function formatReservationDateTime(date, time) {
-    return `${date} ${time}`;
+    const dateText = String(date || "").trim();
+    const timeText = normalizeTimeInputValue(time);
+    return isDateText(dateText) && isTimeText(timeText) ? `${dateText} ${timeText}` : "";
   }
 
   function expectedActiveTime(startTime, endTime) {
@@ -1410,7 +1420,7 @@
     const startTime = normalizeTimeInputValue(controls.start.value || pickerValue.startTime || "");
     const endTime = normalizeTimeInputValue(controls.end.value || pickerValue.endTime || "");
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "日期格式不正确" };
+    if (!isDateText(date)) return { error: "日期格式不正确" };
     if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
 
     controls.start.value = startTime;
@@ -1445,7 +1455,7 @@
   }
 
   async function submitSeatReservation(seatId, startTime, endTime) {
-    if (!/^\d{4}-\d{2}-\d{2}\s+[0-2]\d:[0-5]\d$/.test(String(startTime || ""))) {
+    if (!isDateTimeText(startTime)) {
       return {
         ok: false,
         status: null,
@@ -1454,7 +1464,7 @@
         error: `开始时间格式不正确：${String(startTime)}`,
       };
     }
-    if (!/^\d{4}-\d{2}-\d{2}\s+[0-2]\d:[0-5]\d$/.test(String(endTime || ""))) {
+    if (!isDateTimeText(endTime)) {
       return {
         ok: false,
         status: null,
@@ -1953,21 +1963,46 @@
     return emitRangePickerRange(block, { [field]: value }, field === "date");
   }
 
+  function completeTimeRangeValue(value, fallbackDate) {
+    const rawDate = String((value && value.date) || fallbackDate || "").trim();
+    const date = isDateText(rawDate) ? rawDate : defaultDateText();
+    const defaultStart = minutesToTime(defaultStartMinutesForDate(date));
+    const defaultEnd = minutesToTime(defaultEndMinutesForDate());
+    let startTime = normalizeTimeInputValue(value && value.startTime);
+    let endTime = normalizeTimeInputValue(value && value.endTime);
+
+    if (!isTimeText(startTime)) startTime = defaultStart;
+    if (!isTimeText(endTime)) endTime = defaultEnd;
+
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+      const closeTime = minutesToTime(defaultEndMinutesForDate());
+      if (timeToMinutes(closeTime) > timeToMinutes(startTime)) {
+        endTime = closeTime;
+      } else {
+        startTime = DAY_OPEN_TIME;
+        endTime = closeTime;
+      }
+    }
+
+    return Object.assign({}, value || {}, { date, startTime, endTime });
+  }
+
   function emitRangePickerRange(block, updates, emitDateChange) {
     if (block.dataset.libseatTopReplacement === "1") {
       const owner = findTimeRangeOwnerVm(block);
       const current = owner && owner.timeRange ? owner.timeRange : currentRangePickerValue(block);
-      return updateOwnerTimeRange(block, Object.assign({}, current, updates), emitDateChange);
+      const next = completeTimeRangeValue(Object.assign({}, current, updates), updates && updates.date);
+      return updateOwnerTimeRange(block, next, emitDateChange);
     }
 
     const vm = findRangePickerVm(block);
     if (!vm) return false;
 
-    const next = Object.assign({}, vm.value || {}, updates);
+    const next = completeTimeRangeValue(Object.assign({}, vm.value || {}, updates), updates && updates.date);
     vm.$emit("input", next);
     vm.$emit("change", next);
-    if (emitDateChange) vm.$emit("change-date");
     updateOwnerTimeRange(block, next, emitDateChange);
+    if (emitDateChange) vm.$emit("change-date");
     return true;
   }
 
@@ -1988,7 +2023,7 @@
     const owner = findTimeRangeOwnerVm(block);
     if (!owner || !owner.timeRange) return false;
 
-    const merged = Object.assign({}, owner.timeRange, next);
+    const merged = completeTimeRangeValue(Object.assign({}, owner.timeRange, next), next && next.date);
     if (typeof owner.$set === "function") {
       owner.$set(owner, "timeRange", merged);
     } else {
