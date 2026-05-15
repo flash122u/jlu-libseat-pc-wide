@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.3
+// @version      1.17.4
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.3";
+  const SCRIPT_VERSION = "1.17.4";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -1395,7 +1395,7 @@
   function reservationCandidatesDetailText(resolvedSeats, range) {
     if (!resolvedSeats.length) return "";
     const first = reservationDetailText(resolvedSeats[0], range);
-    return resolvedSeats.length > 1 ? `${first}；共 ${resolvedSeats.length} 个候选，按顺序尝试` : first;
+    return resolvedSeats.length > 1 ? `${first}；共 ${resolvedSeats.length} 个候选，并发尝试` : first;
   }
 
   function currentReservationRule() {
@@ -3154,6 +3154,110 @@
     };
   }
 
+  function submitConcurrentAttempt(resolvedSeats, range) {
+    const results = [];
+    let remaining = resolvedSeats.length;
+    let settled = false;
+
+    return new Promise((resolve) => {
+      if (!remaining) {
+        resolve({ success: null, results });
+        return;
+      }
+
+      resolvedSeats.forEach((seat, index) => {
+        submitSeatReservation(seat.id, range.startDateTime, range.endDateTime)
+          .then((result) => {
+            const item = {
+              seat,
+              index,
+              result,
+              success: submitResponseSuccess(result, seat.id),
+            };
+            results[index] = item;
+
+            if (item.success && !settled) {
+              settled = true;
+              resolve({ success: item, results });
+              return;
+            }
+
+            remaining -= 1;
+            if (!remaining && !settled) {
+              settled = true;
+              resolve({ success: null, results });
+            }
+          })
+          .catch((error) => {
+            results[index] = {
+              seat,
+              index,
+              result: { ok: false, error: String((error && error.message) || error) },
+              success: null,
+            };
+
+            remaining -= 1;
+            if (!remaining && !settled) {
+              settled = true;
+              resolve({ success: null, results });
+            }
+          });
+      });
+    });
+  }
+
+  async function submitResolvedSeatsConcurrentlyWithRetries(resolvedSeats, range, onStatus) {
+    let lastResult = null;
+
+    for (let attempt = 1; attempt <= DEFAULT_RESERVATION_RETRIES; attempt += 1) {
+      onStatus(
+        `第 ${attempt}/${DEFAULT_RESERVATION_RETRIES} 次并发提交：共 ${resolvedSeats.length} 个候选`,
+        "warn"
+      );
+
+      const attemptResult = await submitConcurrentAttempt(resolvedSeats, range);
+      const completedResults = attemptResult.results.filter(Boolean);
+      lastResult = (completedResults[completedResults.length - 1] || {}).result || lastResult;
+
+      if (attemptResult.success) {
+        const { seat, success } = attemptResult.success;
+        const verify = await verifyActiveReservation(seat.id, range.startDateTime, range.endDateTime);
+        return {
+          ok: true,
+          seat,
+          submitData: success,
+          verify,
+          tone: verify.ok ? "success" : "warn",
+          message: submitSuccessStatusText(success, seat, range, verify),
+        };
+      }
+
+      if (attempt < DEFAULT_RESERVATION_RETRIES) {
+        await sleepMs(DEFAULT_RESERVATION_RETRY_INTERVAL_MS);
+      }
+    }
+
+    for (const seat of resolvedSeats) {
+      const verify = await verifyActiveReservation(seat.id, range.startDateTime, range.endDateTime);
+      if (verify.ok) {
+        return {
+          ok: true,
+          seat,
+          submitData: null,
+          verify,
+          tone: "success",
+          message: `预约已在当前预约列表确认：${reservationDetailText(seat, range, null, verify)}`,
+        };
+      }
+    }
+
+    return {
+      ok: false,
+      message: `预约失败：${responseMessage(lastResult)}`,
+      tone: "error",
+    };
+  }
+
   function nextAutoSubmitDelay() {
     const now = new Date();
     const target = new Date(now);
@@ -3256,8 +3360,8 @@
     controls.autoButton.textContent = "自动预约中";
 
     try {
-      setAutoStatus(controls, `21:00 自动预约开始：${reservationCandidatesDetailText(resolved.seats, range)}`, "warn");
-      const result = await submitResolvedSeatsWithRetries(resolved.seats, range, (message, tone) =>
+      setAutoStatus(controls, `21:00 自动预约并发开始：${reservationCandidatesDetailText(resolved.seats, range)}`, "warn");
+      const result = await submitResolvedSeatsConcurrentlyWithRetries(resolved.seats, range, (message, tone) =>
         setAutoStatus(controls, message, tone)
       );
       setAutoStatus(controls, result.message, result.tone);
