@@ -641,7 +641,7 @@
 
       .libseat-manual-slot-select,
       .libseat-manual-slot-empty {
-        max-width: 160px;
+        max-width: 176px;
       }
 
       .libseat-slot-empty.libseat-manual-slot-empty {
