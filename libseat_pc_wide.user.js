@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.16.8
+// @version      1.16.9
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.16.8";
+  const SCRIPT_VERSION = "1.16.9";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
   const DEFAULT_MIN_RESERVATION_MINUTES = 30;
@@ -582,7 +582,7 @@
 
       .libseat-manual-slot-select,
       .libseat-manual-slot-empty {
-        max-width: none;
+        max-width: 176px;
       }
 
       .libseat-slot-empty.libseat-manual-slot-empty {
