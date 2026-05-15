@@ -1,6 +1,9 @@
 # JLU LibSeat PC Wide Layout
 
 吉林大学图书馆预约网页增强脚本。
+
+已上传 Greasy Fork ，链接： [JLU LibSeat PC Wide Layout](https://greasyfork.org/zh-CN/scripts/578282-jlu-libseat-pc-wide-layout) 
+
 脚本主要面向 [吉林大学图书馆座位预约](https://libseat.jlu.edu.cn)，用于改善 PC 浏览器里的座位地图、时间选择和座位预约体验。
 
 ## 功能
@@ -19,10 +22,9 @@
 
 ## 安装
 
-1. 安装浏览器 userscript 扩展，例如 Tampermonkey 或 Violentmonkey。
-2. 打开仓库中的 `libseat_pc_wide.user.js`。
-3. 将脚本内容安装到 userscript 扩展中。
-4. 访问 [https://libseat.jlu.edu.cn](https://libseat.jlu.edu.cn)。
+1. 安装浏览器 userscript 扩展，例如 [Tampermonkey]([首页 | Tampermonkey](https://www.tampermonkey.net/)) 或 [Violentmonkey](https://violentmonkey.github.io/get-it/)。
+2. 打开仓库中的 `libseat_pc_wide.user.js` 安装到扩展中，或者使用 Greasy Fork 链接 [JLU LibSeat PC Wide Layout](https://greasyfork.org/zh-CN/scripts/578282-jlu-libseat-pc-wide-layout) 安装。
+4. 访问 [https://libseat.jlu.edu.cn](https://libseat.jlu.edu.cn) 进行预约。
 
 ## 使用
 
