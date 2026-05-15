@@ -22,7 +22,7 @@
 
 ## 安装
 
-1. 安装浏览器 userscript 扩展，例如 [Tampermonkey]([首页 | Tampermonkey](https://www.tampermonkey.net/)) 或 [Violentmonkey](https://violentmonkey.github.io/get-it/)。
+1. 安装浏览器 userscript 扩展，例如 [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/get-it/)。
 2. 打开仓库中的 `libseat_pc_wide.user.js` 安装到扩展中，或者使用 Greasy Fork 链接 [JLU LibSeat PC Wide Layout](https://greasyfork.org/zh-CN/scripts/578282-jlu-libseat-pc-wide-layout) 安装。
 4. 访问 [https://libseat.jlu.edu.cn](https://libseat.jlu.edu.cn) 进行预约。
 
