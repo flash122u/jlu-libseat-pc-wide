@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.5
+// @version      1.17.6
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.5";
+  const SCRIPT_VERSION = "1.17.6";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -1407,11 +1407,14 @@
   function reservationRangeFromControls(block, controls, dateOverride) {
     const pickerValue = currentRangePickerValue(block);
     const date = String(dateOverride || controls.date || pickerValue.date || "").trim();
-    const startTime = String(controls.start.value || pickerValue.startTime || "").trim();
-    const endTime = String(controls.end.value || pickerValue.endTime || "").trim();
+    const startTime = normalizeTimeInputValue(controls.start.value || pickerValue.startTime || "");
+    const endTime = normalizeTimeInputValue(controls.end.value || pickerValue.endTime || "");
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "日期格式不正确" };
     if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
+
+    controls.start.value = startTime;
+    controls.end.value = endTime;
 
     const startMinutes = timeToMinutes(startTime);
     const endMinutes = timeToMinutes(endTime);
@@ -1442,6 +1445,25 @@
   }
 
   async function submitSeatReservation(seatId, startTime, endTime) {
+    if (!/^\d{4}-\d{2}-\d{2}\s+[0-2]\d:[0-5]\d$/.test(String(startTime || ""))) {
+      return {
+        ok: false,
+        status: null,
+        bodyText: "",
+        data: null,
+        error: `开始时间格式不正确：${String(startTime)}`,
+      };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}\s+[0-2]\d:[0-5]\d$/.test(String(endTime || ""))) {
+      return {
+        ok: false,
+        status: null,
+        bodyText: "",
+        data: null,
+        error: `结束时间格式不正确：${String(endTime)}`,
+      };
+    }
+
     return fetchReservationJson(RESERVATION_SUBMIT_PATH, {
       method: "POST",
       headers: reservationHeaders(true),
