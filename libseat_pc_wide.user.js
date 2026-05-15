@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.15.0
+// @version      1.16.0
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.15.0";
+  const SCRIPT_VERSION = "1.16.0";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
   const DEFAULT_MIN_RESERVATION_MINUTES = 30;
@@ -273,8 +273,8 @@
         background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
         border: 1px solid #e6ebf2;
         border-radius: 8px;
-        padding: 16px 18px;
-        margin-bottom: 14px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
         box-sizing: border-box;
         box-shadow: 0 8px 24px rgba(31, 41, 55, 0.06);
       }
@@ -284,7 +284,7 @@
         align-items: baseline;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
       }
 
       .libseat-time-replacement-title {
@@ -301,15 +301,15 @@
 
       .libseat-reserve-stack {
         display: grid;
-        gap: 10px;
+        gap: 6px;
       }
 
       .libseat-reserve-row {
         display: grid;
         align-items: end;
-        gap: 12px;
-        min-height: 62px;
-        padding: 10px 12px;
+        gap: 8px;
+        min-height: 46px;
+        padding: 6px 8px;
         border: 1px solid #e2e8f0;
         border-radius: 6px;
         background: #f8fafc;
@@ -317,15 +317,15 @@
       }
 
       .libseat-reserve-query-row {
-        grid-template-columns: 72px minmax(190px, 1fr) minmax(150px, 0.8fr) minmax(240px, 1.25fr);
+        grid-template-columns: 64px minmax(164px, 0.95fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(120px, 0.7fr) minmax(210px, 1.15fr);
       }
 
-      .libseat-reserve-today-row {
-        grid-template-columns: 72px minmax(90px, 0.45fr) minmax(90px, 0.45fr) auto minmax(240px, 1.7fr);
+      .libseat-reserve-manual-row {
+        grid-template-columns: 64px minmax(140px, 0.85fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(260px, 1.6fr);
       }
 
       .libseat-reserve-auto-row {
-        grid-template-columns: 72px auto minmax(260px, 1fr);
+        grid-template-columns: 64px minmax(140px, 0.85fr) minmax(94px, 0.55fr) minmax(94px, 0.55fr) auto minmax(260px, 1.6fr);
         align-items: center;
       }
 
@@ -355,8 +355,14 @@
       .libseat-time-field {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 4px;
         min-width: 0;
+      }
+
+      .libseat-reserve-row .libseat-time-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
       }
 
       .libseat-time-field label {
@@ -364,6 +370,11 @@
         font-size: 12px;
         font-weight: 600;
         line-height: 1;
+      }
+
+      .libseat-reserve-row .libseat-time-field label {
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
 
       .libseat-time-field input {
@@ -381,6 +392,12 @@
         transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
       }
 
+      .libseat-reserve-row .libseat-time-field input {
+        height: 34px;
+        padding: 0 8px;
+        font-size: 14px;
+      }
+
       .libseat-time-field input:focus {
         border-color: #65cafd;
         box-shadow: 0 0 0 2px rgba(101, 202, 253, 0.18);
@@ -391,8 +408,8 @@
       }
 
       .libseat-reserve-button {
-        height: 42px;
-        min-width: 108px;
+        height: 34px;
+        min-width: 92px;
         border: 1px solid #16a6d9;
         border-radius: 6px;
         background: #16a6d9;
@@ -415,11 +432,11 @@
       }
 
       .libseat-reserve-status {
-        min-height: 42px;
+        min-height: 34px;
         min-width: 0;
         display: flex;
         align-items: center;
-        padding: 7px 12px;
+        padding: 5px 9px;
         border-radius: 6px;
         box-sizing: border-box;
         background: #f8fafc;
@@ -431,11 +448,11 @@
       }
 
       .libseat-auto-status {
-        min-height: 42px;
+        min-height: 34px;
         min-width: 0;
         display: flex;
         align-items: center;
-        padding: 7px 12px;
+        padding: 5px 9px;
         border-radius: 6px;
         box-sizing: border-box;
         background: #fff;
@@ -479,19 +496,19 @@
       .libseat-date-buttons {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 6px;
         min-width: 0;
       }
 
       .libseat-date-button {
-        height: 42px;
+        height: 34px;
         min-width: 0;
         border: 1px solid #d6dde8;
         border-radius: 6px;
         padding: 0 8px;
         background: #fff;
         color: #344054;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         white-space: nowrap;
         cursor: pointer;
@@ -532,16 +549,16 @@
       }
 
       .libseat-slot-select {
-        height: 42px;
+        height: 34px;
         min-width: 0;
         width: 100%;
         border: 1px solid #d6dde8;
         border-radius: 6px;
-        padding: 0 12px;
+        padding: 0 8px;
         box-sizing: border-box;
         background: #fff;
         color: #111827;
-        font-size: 15px;
+        font-size: 14px;
         font-variant-numeric: tabular-nums;
         outline: none;
       }
@@ -552,10 +569,10 @@
       }
 
       .libseat-slot-empty {
-        height: 42px;
+        height: 34px;
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 8px;
         border-radius: 6px;
         background: #fff7ed;
         color: #9a3412;
@@ -1983,8 +2000,9 @@
 
   function syncReplacementInputs(block, controls) {
     if (controls.focused) return;
-    if (controls.seat && controls.button && controls.status) {
+    if (controls.queryStart && controls.queryEnd) {
       updateReserveButtonDetail(block, controls);
+      updateAutoReservationDetail(block, controls);
       return;
     }
     const value = currentRangePickerValue(block);
@@ -2098,31 +2116,107 @@
       : "开启 21:00 自动预约次日座位";
   }
 
+  function rangeControls(date, startInput, endInput) {
+    return {
+      date,
+      start: startInput,
+      end: endInput,
+    };
+  }
+
+  function queryRangeFromControls(block, controls) {
+    return reservationRangeFromControls(
+      block,
+      rangeControls(controls.date, controls.queryStart, controls.queryEnd),
+      controls.date
+    );
+  }
+
+  function manualRangeFromControls(block, controls) {
+    return reservationRangeFromControls(
+      block,
+      rangeControls(todayText(), controls.manualStart, controls.manualEnd),
+      todayText()
+    );
+  }
+
+  function autoRangeFromControls(block, controls, submitTime) {
+    const target = submitTime || nextAutoSubmitDelay().target;
+    const reserveDate = autoReservationDateForSubmitTime(target);
+    return reservationRangeFromControls(
+      block,
+      rangeControls(reserveDate, controls.autoStart, controls.autoEnd),
+      reserveDate
+    );
+  }
+
+  function refreshSeatMapFromQuery(block, controls) {
+    const range = queryRangeFromControls(block, controls);
+    if (range.error) {
+      setReserveSlotEmpty(controls, range.error, false);
+      return false;
+    }
+
+    const current = currentRangePickerValue(block);
+    emitRangePickerRange(
+      block,
+      { date: range.date, startTime: range.startTime, endTime: range.endTime },
+      current.date !== range.date
+    );
+    return true;
+  }
+
   function updateReserveButtonDetail(block, controls, force) {
     if (controls.busy) return;
 
-    const range = reservationRangeFromControls(block, controls, todayText());
-    const resolved = resolveSeatCandidates(controls.seat.value);
+    const range = manualRangeFromControls(block, controls);
+    const resolved = resolveSeatCandidates(controls.manualSeat.value);
     const canUpdateStatus = force || !controls.status.dataset.libseatTone;
     if (range.error || !resolved.seats.length) {
       controls.button.removeAttribute("title");
-      controls.button.setAttribute("aria-label", "预约今天");
+      controls.button.setAttribute("aria-label", "手动预约");
       if (!canUpdateStatus) return;
       if (range.error) {
         setReserveStatus(controls, range.error, "error");
-      } else if (controls.seat.value.trim()) {
+      } else if (controls.manualSeat.value.trim()) {
         setReserveStatus(controls, resolved.errors[0] || "请输入座位号", "error");
       } else {
-        setReserveStatus(controls, "输入座位号和时间后预约今天", "");
+        setReserveStatus(controls, "输入座位号和开始/结束时间后手动预约今天", "");
       }
       return;
     }
 
     const detail = reservationCandidatesDetailText(resolved.seats, range);
     controls.button.title = detail;
-    controls.button.setAttribute("aria-label", `预约今天：${detail}`);
+    controls.button.setAttribute("aria-label", `手动预约：${detail}`);
     if (canUpdateStatus) {
       setReserveStatus(controls, `将预约：${detail}`, "");
+    }
+  }
+
+  function updateAutoReservationDetail(block, controls, force) {
+    if (controls.busy || controls.autoEnabled) return;
+
+    const range = autoRangeFromControls(block, controls);
+    const resolved = resolveSeatCandidates(controls.autoSeat.value);
+    const canUpdateStatus = force || !controls.autoStatus.dataset.libseatTone;
+    if (range.error || !resolved.seats.length) {
+      controls.autoButton.removeAttribute("title");
+      if (!canUpdateStatus) return;
+      if (range.error) {
+        setAutoStatus(controls, range.error, "error");
+      } else if (controls.autoSeat.value.trim()) {
+        setAutoStatus(controls, resolved.errors[0] || "请输入座位号", "error");
+      } else {
+        setAutoStatus(controls, "输入自动预约座位号和开始/结束时间；默认预约次日", "");
+      }
+      return;
+    }
+
+    const detail = reservationCandidatesDetailText(resolved.seats, range);
+    controls.autoButton.title = detail;
+    if (canUpdateStatus) {
+      setAutoStatus(controls, `将自动预约：${detail}`, "");
     }
   }
 
@@ -2142,10 +2236,10 @@
 
     const [startTime, endTime] = controls.slotSelect.value.split("|");
     controls.applyingSlot = true;
-    controls.start.value = startTime;
-    controls.end.value = endTime;
+    controls.queryStart.value = startTime;
+    controls.queryEnd.value = endTime;
     controls.applyingSlot = false;
-    updateReserveButtonDetail(block, controls);
+    refreshSeatMapFromQuery(block, controls);
   }
 
   function renderReserveSlots(block, controls, seat, slots) {
@@ -2154,7 +2248,6 @@
 
     if (!slots.length) {
       setReserveSlotEmpty(controls, `${seat.label} 当前日期没有可预约时间段`, false);
-      updateReserveButtonDetail(block, controls);
       return;
     }
 
@@ -2173,13 +2266,12 @@
       ? previous
       : controls.slotSelect.options[0].value;
     controls.slotSelect.value = selected;
-    if (!controls.timeManuallyEdited && (selected !== previous || controls.slotSeatId !== Number(seat.id))) {
-      controls.slotSeatId = Number(seat.id);
+    if (!controls.queryTimeManuallyEdited && (selected !== previous || controls.querySlotSeatId !== Number(seat.id))) {
+      controls.querySlotSeatId = Number(seat.id);
       applyReserveSlot(block, controls);
     } else {
-      controls.slotSeatId = Number(seat.id);
+      controls.querySlotSeatId = Number(seat.id);
     }
-    updateReserveButtonDetail(block, controls);
   }
 
   async function updateReserveSlotSelect(block, controls) {
@@ -2192,16 +2284,12 @@
       return;
     }
 
-    const resolved = resolveSeatCandidates(controls.seat.value);
+    const resolved = resolveSeatCandidates(controls.querySeat.value);
     const seat = resolved.seats[0];
     if (!seat) {
       setReserveSlotEmpty(controls, resolved.errors[0] || "请输入座位号", false);
       return;
     }
-    if (resolved.seats.length > 1) {
-      setReserveStatus(controls, `时间段显示 ${seat.label}；提交时会按 ${resolved.seats.length} 个候选依次尝试`, "");
-    }
-
     const rule = currentReservationRule();
     const optimisticSlots = availableSlotsFromSeat(seat.seat, date, rule);
     if (optimisticSlots.length) {
@@ -2216,8 +2304,6 @@
     if (!result.ok || !Array.isArray(result.data)) {
       if (!optimisticSlots.length) {
         setReserveSlotEmpty(controls, `读取失败：${responseMessage(result)}`, false);
-      } else {
-        setReserveStatus(controls, `预约情况读取失败，暂用地图时间段：${responseMessage(result)}`, "warn");
       }
       return;
     }
@@ -2332,8 +2418,8 @@
     }
 
     const preview = nextAutoSubmitDelay();
-    const autoRange = reservationRangeFromControls(block, controls, autoReservationDateForSubmitTime(preview.target));
-    const resolved = resolveSeatCandidates(controls.seat.value);
+    const autoRange = autoRangeFromControls(block, controls, preview.target);
+    const resolved = resolveSeatCandidates(controls.autoSeat.value);
     if (autoRange.error) {
       controls.autoEnabled = false;
       updateAutoButtonState(controls);
@@ -2371,9 +2457,8 @@
     }
 
     const effectiveSubmitTime = submitTime || new Date();
-    const reserveDate = autoReservationDateForSubmitTime(effectiveSubmitTime);
-    const range = reservationRangeFromControls(block, controls, reserveDate);
-    const resolved = resolveSeatCandidates(controls.seat.value);
+    const range = autoRangeFromControls(block, controls, effectiveSubmitTime);
+    const resolved = resolveSeatCandidates(controls.autoSeat.value);
     if (range.error || !resolved.seats.length || !currentAuthorizationHeader()) {
       controls.autoEnabled = false;
       updateAutoButtonState(controls);
@@ -2403,7 +2488,7 @@
       controls.busy = false;
       controls.button.disabled = false;
       controls.autoButton.disabled = false;
-      controls.button.textContent = "预约今天";
+      controls.button.textContent = "手动预约";
       updateAutoButtonState(controls);
     }
   }
@@ -2411,13 +2496,13 @@
   async function runSeatReservation(block, controls) {
     if (controls.busy) return;
 
-    const range = reservationRangeFromControls(block, controls, todayText());
+    const range = manualRangeFromControls(block, controls);
     if (range.error) {
       setReserveStatus(controls, range.error, "error");
       return;
     }
 
-    const resolved = resolveSeatCandidates(controls.seat.value);
+    const resolved = resolveSeatCandidates(controls.manualSeat.value);
     if (!resolved.seats.length) {
       setReserveStatus(controls, resolved.errors[0] || "请输入座位号", "error");
       return;
@@ -2443,7 +2528,7 @@
       controls.busy = false;
       controls.button.disabled = false;
       controls.autoButton.disabled = false;
-      controls.button.textContent = "预约今天";
+      controls.button.textContent = "手动预约";
       updateAutoButtonState(controls);
     }
   }
@@ -2457,23 +2542,35 @@
     const tomorrow = tomorrowText();
     const defaultDate = defaultDateText();
     const dateValue = defaultDate;
-    const defaultStart = defaultStartMinutesForDate(today);
+    const defaultStart = defaultStartMinutesForDate(dateValue);
+    const manualDefaultStart = defaultStartMinutesForDate(today);
+    const autoDefaultStart = timeToMinutes(DAY_OPEN_TIME);
     const defaultEnd = defaultEndMinutesForDate();
     const startValue =
-      value.date === today && value.startTime && isTimeText(value.startTime)
+      value.date === dateValue && value.startTime && isTimeText(value.startTime)
         ? value.startTime
         : minutesToTime(defaultStart);
     const endValue =
-      value.date === today && value.endTime && isTimeText(value.endTime)
+      value.date === dateValue && value.endTime && isTimeText(value.endTime)
         ? value.endTime
         : minutesToTime(defaultEnd);
+    const manualStartValue = minutesToTime(manualDefaultStart);
+    const manualEndValue = minutesToTime(defaultEnd);
+    const autoStartValue = minutesToTime(autoDefaultStart);
+    const autoEndValue = minutesToTime(defaultEnd);
 
     const wrapper = document.createElement("div");
     const index = ++replacementIndex;
-    const startId = `libseat-start-input-${index}`;
-    const endId = `libseat-end-input-${index}`;
-    const seatId = `libseat-seat-input-${index}`;
+    const queryStartId = `libseat-query-start-input-${index}`;
+    const queryEndId = `libseat-query-end-input-${index}`;
+    const querySeatId = `libseat-query-seat-input-${index}`;
     const reserveSlotId = `libseat-reserve-slot-select-${index}`;
+    const manualStartId = `libseat-manual-start-input-${index}`;
+    const manualEndId = `libseat-manual-end-input-${index}`;
+    const manualSeatId = `libseat-manual-seat-input-${index}`;
+    const autoStartId = `libseat-auto-start-input-${index}`;
+    const autoEndId = `libseat-auto-end-input-${index}`;
+    const autoSeatId = `libseat-auto-seat-input-${index}`;
     wrapper.className = "libseat-time-replacement";
     wrapper.innerHTML = `
       <div class="libseat-time-replacement-head">
@@ -2491,8 +2588,17 @@
             </div>
           </div>
           <div class="libseat-time-field">
-            <label for="${seatId}">座位</label>
-            <input id="${seatId}" name="libseat_seat_${index}" class="libseat-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63 或 id:44" aria-label="座位号">
+            <label for="${queryStartId}">开始</label>
+            <input id="${queryStartId}" name="libseat_query_start_${index}" class="libseat-query-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="查询开始时间">
+          </div>
+          <div class="libseat-time-field">
+            <label for="${queryEndId}">结束</label>
+            <input id="${queryEndId}" name="libseat_query_end_${index}" class="libseat-query-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="查询结束时间">
+          </div>
+          <button class="libseat-reserve-button libseat-query-button" type="button">刷新地图</button>
+          <div class="libseat-time-field">
+            <label for="${querySeatId}">座位</label>
+            <input id="${querySeatId}" name="libseat_query_seat_${index}" class="libseat-query-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62" aria-label="查询座位号">
           </div>
           <div class="libseat-time-field">
             <label for="${reserveSlotId}">可预约时间段</label>
@@ -2500,25 +2606,41 @@
             <div class="libseat-slot-empty" style="display:none;">输入座位号后读取时间段</div>
           </div>
         </div>
-        <div class="libseat-reserve-row libseat-reserve-today-row">
-          <div class="libseat-reserve-row-title">预约今天</div>
+        <div class="libseat-reserve-row libseat-reserve-manual-row">
+          <div class="libseat-reserve-row-title">手动预约</div>
           <div class="libseat-time-field">
-            <label for="${startId}">开始</label>
-            <input id="${startId}" name="libseat_start_${index}" class="libseat-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="开始时间">
+            <label for="${manualSeatId}">座位</label>
+            <input id="${manualSeatId}" name="libseat_manual_seat_${index}" class="libseat-manual-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63 或 id:44" aria-label="手动预约座位号">
           </div>
           <div class="libseat-time-field">
-            <label for="${endId}">结束</label>
-            <input id="${endId}" name="libseat_end_${index}" class="libseat-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="结束时间">
+            <label for="${manualStartId}">开始</label>
+            <input id="${manualStartId}" name="libseat_manual_start_${index}" class="libseat-manual-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="手动预约开始时间">
+          </div>
+          <div class="libseat-time-field">
+            <label for="${manualEndId}">结束</label>
+            <input id="${manualEndId}" name="libseat_manual_end_${index}" class="libseat-manual-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="手动预约结束时间">
           </div>
           <div class="libseat-reserve-submit">
-            <button class="libseat-reserve-button libseat-submit-button" type="button">预约今天</button>
+            <button class="libseat-reserve-button libseat-submit-button" type="button">手动预约</button>
           </div>
-          <div class="libseat-reserve-status" aria-live="polite">输入座位号和时间后预约今天</div>
+          <div class="libseat-reserve-status" aria-live="polite">输入座位号和开始/结束时间后手动预约今天</div>
         </div>
         <div class="libseat-reserve-row libseat-reserve-auto-row">
           <div class="libseat-reserve-row-title">自动预约</div>
+          <div class="libseat-time-field">
+            <label for="${autoSeatId}">座位</label>
+            <input id="${autoSeatId}" name="libseat_auto_seat_${index}" class="libseat-auto-seat-input" type="text" inputmode="text" autocomplete="off" placeholder="62, 63 或 id:44" aria-label="自动预约座位号">
+          </div>
+          <div class="libseat-time-field">
+            <label for="${autoStartId}">开始</label>
+            <input id="${autoStartId}" name="libseat_auto_start_${index}" class="libseat-auto-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="自动预约开始时间">
+          </div>
+          <div class="libseat-time-field">
+            <label for="${autoEndId}">结束</label>
+            <input id="${autoEndId}" name="libseat_auto_end_${index}" class="libseat-auto-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="自动预约结束时间">
+          </div>
           <button class="libseat-reserve-button libseat-auto-button" type="button">开启 21:00 自动预约次日座位</button>
-          <div class="libseat-auto-status" aria-live="polite">使用上方座位和开始/结束时间；可填多个座位，成功一个即停止</div>
+          <div class="libseat-auto-status" aria-live="polite">输入座位号和开始/结束时间；默认预约次日</div>
         </div>
       </div>
     `;
@@ -2527,12 +2649,19 @@
       date: dateValue,
       todayButton: wrapper.querySelector(".libseat-today-button"),
       tomorrowButton: wrapper.querySelector(".libseat-tomorrow-button"),
-      start: wrapper.querySelector(".libseat-start-input"),
-      end: wrapper.querySelector(".libseat-end-input"),
-      seat: wrapper.querySelector(".libseat-seat-input"),
+      queryStart: wrapper.querySelector(".libseat-query-start-input"),
+      queryEnd: wrapper.querySelector(".libseat-query-end-input"),
+      querySeat: wrapper.querySelector(".libseat-query-seat-input"),
+      queryButton: wrapper.querySelector(".libseat-query-button"),
       slotSelect: wrapper.querySelector(".libseat-slot-select"),
       slotEmpty: wrapper.querySelector(".libseat-slot-empty"),
+      manualSeat: wrapper.querySelector(".libseat-manual-seat-input"),
+      manualStart: wrapper.querySelector(".libseat-manual-start-input"),
+      manualEnd: wrapper.querySelector(".libseat-manual-end-input"),
       button: wrapper.querySelector(".libseat-submit-button"),
+      autoSeat: wrapper.querySelector(".libseat-auto-seat-input"),
+      autoStart: wrapper.querySelector(".libseat-auto-start-input"),
+      autoEnd: wrapper.querySelector(".libseat-auto-end-input"),
       autoButton: wrapper.querySelector(".libseat-auto-button"),
       status: wrapper.querySelector(".libseat-reserve-status"),
       autoStatus: wrapper.querySelector(".libseat-auto-status"),
@@ -2541,64 +2670,99 @@
       autoTimer: null,
       slotUpdateTimer: null,
       slotRequestId: 0,
-      slotSeatId: null,
-      timeManuallyEdited: false,
+      querySlotSeatId: null,
+      queryTimeManuallyEdited: false,
       applyingSlot: false,
       get focused() {
         return wrapper.dataset.libseatFocused === "1";
       },
     };
 
-    controls.start.value = startValue;
-    controls.end.value = endValue;
+    controls.queryStart.value = startValue;
+    controls.queryEnd.value = endValue;
+    controls.manualStart.value = manualStartValue;
+    controls.manualEnd.value = manualEndValue;
+    controls.autoStart.value = autoStartValue;
+    controls.autoEnd.value = autoEndValue;
     updateDateButtons(controls, dateValue);
     bindReserveQueryDateButton(block, controls, controls.todayButton);
     bindReserveQueryDateButton(block, controls, controls.tomorrowButton);
-    bindReserveTimeInput(controls.start);
-    bindReserveTimeInput(controls.end);
-    controls.start.addEventListener("input", () => {
-      if (!controls.applyingSlot) controls.timeManuallyEdited = true;
-      updateReserveButtonDetail(block, controls, true);
-    });
-    controls.end.addEventListener("input", () => {
-      if (!controls.applyingSlot) controls.timeManuallyEdited = true;
-      updateReserveButtonDetail(block, controls, true);
-    });
-    bindReserveSeatInput(controls.seat);
+    bindReserveTimeInput(controls.queryStart);
+    bindReserveTimeInput(controls.queryEnd);
+    bindReserveTimeInput(controls.manualStart);
+    bindReserveTimeInput(controls.manualEnd);
+    bindReserveTimeInput(controls.autoStart);
+    bindReserveTimeInput(controls.autoEnd);
+    bindReserveSeatInput(controls.querySeat);
+    bindReserveSeatInput(controls.manualSeat);
+    bindReserveSeatInput(controls.autoSeat);
     setReserveSlotEmpty(controls, "输入座位号后读取时间段", false);
-    controls.seat.addEventListener("keydown", (event) => {
+    controls.queryButton.addEventListener("click", () => {
+      refreshSeatMapFromQuery(block, controls);
+      queueReserveSlotUpdate(block, controls, 0);
+    });
+    controls.querySeat.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      refreshSeatMapFromQuery(block, controls);
+      queueReserveSlotUpdate(block, controls, 0);
+    });
+    controls.querySeat.addEventListener("input", () => {
+      queueReserveSlotUpdate(block, controls, 350);
+    });
+    controls.queryStart.addEventListener("input", () => {
+      if (!controls.applyingSlot) controls.queryTimeManuallyEdited = true;
+    });
+    controls.queryEnd.addEventListener("input", () => {
+      if (!controls.applyingSlot) controls.queryTimeManuallyEdited = true;
+    });
+    controls.queryStart.addEventListener("blur", () => {
+      refreshSeatMapFromQuery(block, controls);
+    });
+    controls.queryEnd.addEventListener("blur", () => {
+      refreshSeatMapFromQuery(block, controls);
+    });
+    controls.manualSeat.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
       runSeatReservation(block, controls);
     });
-    controls.seat.addEventListener("input", () => {
-      queueReserveSlotUpdate(block, controls, 350);
+    controls.manualSeat.addEventListener("input", () => {
       updateReserveButtonDetail(block, controls, true);
     });
-    controls.seat.addEventListener("blur", () => {
-      if (controls.autoEnabled) setAutoReserveEnabled(block, controls, true);
-    });
+    controls.manualStart.addEventListener("input", () => updateReserveButtonDetail(block, controls, true));
+    controls.manualEnd.addEventListener("input", () => updateReserveButtonDetail(block, controls, true));
     controls.slotSelect.addEventListener("change", () => {
       applyReserveSlot(block, controls);
-      updateReserveButtonDetail(block, controls, true);
     });
     controls.todayButton.addEventListener("click", () => {
-      setTimeout(() => updateReserveButtonDetail(block, controls, true), 0);
+      setTimeout(() => refreshSeatMapFromQuery(block, controls), 0);
     });
     controls.tomorrowButton.addEventListener("click", () => {
-      setTimeout(() => updateReserveButtonDetail(block, controls, true), 0);
+      setTimeout(() => refreshSeatMapFromQuery(block, controls), 0);
     });
-    controls.start.addEventListener("blur", () => {
-      updateReserveButtonDetail(block, controls, true);
+    controls.manualStart.addEventListener("blur", () => updateReserveButtonDetail(block, controls, true));
+    controls.manualEnd.addEventListener("blur", () => updateReserveButtonDetail(block, controls, true));
+    controls.autoSeat.addEventListener("input", () => updateAutoReservationDetail(block, controls, true));
+    controls.autoSeat.addEventListener("blur", () => {
       if (controls.autoEnabled) setAutoReserveEnabled(block, controls, true);
     });
-    controls.end.addEventListener("blur", () => {
-      updateReserveButtonDetail(block, controls, true);
+    controls.autoStart.addEventListener("input", () => updateAutoReservationDetail(block, controls, true));
+    controls.autoEnd.addEventListener("input", () => updateAutoReservationDetail(block, controls, true));
+    controls.autoStart.addEventListener("blur", () => {
+      updateAutoReservationDetail(block, controls, true);
+      if (controls.autoEnabled) setAutoReserveEnabled(block, controls, true);
+    });
+    controls.autoEnd.addEventListener("blur", () => {
+      updateAutoReservationDetail(block, controls, true);
       if (controls.autoEnabled) setAutoReserveEnabled(block, controls, true);
     });
     controls.autoButton.addEventListener("click", () => setAutoReserveEnabled(block, controls, !controls.autoEnabled));
     controls.button.addEventListener("click", () => runSeatReservation(block, controls));
     updateAutoButtonState(controls);
+    updateReserveButtonDetail(block, controls, true);
+    updateAutoReservationDetail(block, controls, true);
+    refreshSeatMapFromQuery(block, controls);
 
     block.parentNode.insertBefore(wrapper, block);
     block.dataset.libseatTopReplacement = "1";
