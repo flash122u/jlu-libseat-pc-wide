@@ -1550,6 +1550,7 @@
     const normalized = raw.toUpperCase().replace(/[_-]+/g, " ");
     if (normalized === "IN USE") return "使用中";
     if (normalized === "TEMPORARY LEAVE") return "暂离";
+    if (normalized === "RESERVED") return "已预约";
     return raw;
   }
 
