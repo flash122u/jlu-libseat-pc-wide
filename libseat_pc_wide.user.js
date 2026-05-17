@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.11
+// @version      1.17.12
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.11";
+  const SCRIPT_VERSION = "1.17.12";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -320,14 +320,21 @@
         box-shadow: 0 0 0 2px rgba(101, 202, 253, .18);
       }
 
-      .libseat-meeting-status-options {
+      .libseat-meeting-toggle-options {
         display: grid;
-        grid-template-columns: 1fr 1fr;
         gap: 4px;
         height: 34px;
       }
 
-      .libseat-meeting-status-option {
+      .libseat-meeting-toggle-options.two {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .libseat-meeting-toggle-options.four {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .libseat-meeting-toggle-option {
         border: 1px solid #d6dde8;
         border-radius: 6px;
         background: #fff;
@@ -337,7 +344,7 @@
         cursor: pointer;
       }
 
-      .libseat-meeting-status-option.active {
+      .libseat-meeting-toggle-option.active {
         border-color: #65cafd;
         background: #eef9ff;
         color: #075985;
@@ -2383,13 +2390,27 @@
             setReactive(vm, "timeRange", Object.assign({}, vm.timeRange, timeRange));
           }
           if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", 0);
-          try {
-            vm.chooseRoom(0);
-          } catch (error) {
-            setReactive(vm, "visible", true);
-          }
-          setReactive(vm, "visible", true);
+          setReactive(vm, "visible", false);
           if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
+
+          function show() {
+            try {
+              vm.chooseRoom(0);
+            } catch (error) {
+              setReactive(vm, "chooseIndex", 0);
+              setReactive(vm, "visible", true);
+            }
+            setReactive(vm, "visible", true);
+            if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
+          }
+
+          if (typeof vm.$nextTick === "function") {
+            vm.$nextTick(function () {
+              setTimeout(show, 0);
+            });
+          } else {
+            setTimeout(show, 0);
+          }
           return true;
         }
 
@@ -3799,30 +3820,33 @@
 
   function meetingFilterValues(controls) {
     return {
-      status: controls.statusValue.value,
-      floor: cleanReservationText(controls.floorFilter.value),
+      statuses: controls.statusButtons
+        .filter((button) => button.classList.contains("active"))
+        .map((button) => button.dataset.value),
+      floors: controls.floorButtons
+        .filter((button) => button.classList.contains("active"))
+        .map((button) => button.dataset.value),
       attendees: numericInputValue(controls.attendeesInput),
     };
   }
 
-  function setMeetingStatusFilter(controls, value) {
-    controls.statusValue.value = value;
-    controls.statusButtons.forEach((button) => {
-      button.classList.toggle("active", button.dataset.value === value);
-    });
+  function toggleMeetingFilterButton(button, controls) {
+    button.classList.toggle("active");
     renderMeetingRooms(controls);
   }
 
   function meetingRoomMatchesFilters(room, range, filters) {
     if (!room) return false;
     const availabilityClass = meetingRoomAvailabilityClass(room, range);
-    if (filters.status === "FREE" && (normalizedRoomStatus(room) !== "FREE" || room.canReserve === false)) return false;
-    if (filters.status === "BUSY" && availabilityClass !== "libseat-meeting-room-unavailable") return false;
-    if (filters.status && filters.status !== "FREE" && filters.status !== "BUSY" && filters.status !== availabilityClass) return false;
+    if (filters.statuses.length) {
+      const freeMatched = filters.statuses.includes("FREE") && normalizedRoomStatus(room) === "FREE" && room.canReserve !== false;
+      const busyMatched = filters.statuses.includes("BUSY") && availabilityClass === "libseat-meeting-room-unavailable";
+      if (!freeMatched && !busyMatched) return false;
+    }
 
-    if (filters.floor) {
+    if (filters.floors.length) {
       const text = cleanReservationText([meetingRoomFloorText(room), room.parentNamePath].filter(Boolean).join(" "));
-      if (!text.includes(filters.floor)) return false;
+      if (!filters.floors.some((floor) => text.includes(floor))) return false;
     }
 
     return roomAllowsAttendees(room, filters.attendees);
@@ -4479,21 +4503,19 @@
         </div>
         <div class="libseat-time-field">
           <label>状态</label>
-          <div class="libseat-meeting-status-options" role="group" aria-label="状态筛选">
-            <button class="libseat-meeting-status-option active" type="button" data-value="FREE">空闲</button>
-            <button class="libseat-meeting-status-option" type="button" data-value="BUSY">使用中/预约中</button>
+          <div class="libseat-meeting-toggle-options two" role="group" aria-label="状态筛选">
+            <button class="libseat-meeting-toggle-option libseat-meeting-status-option" type="button" data-value="FREE">空闲</button>
+            <button class="libseat-meeting-toggle-option libseat-meeting-status-option" type="button" data-value="BUSY">使用中/预约中</button>
           </div>
-          <input class="libseat-meeting-status-value" type="hidden" value="FREE">
         </div>
         <div class="libseat-time-field">
           <label>楼层</label>
-          <select class="libseat-meeting-floor-filter" aria-label="楼层筛选">
-            <option value="">全部</option>
-            <option value="2楼">2楼</option>
-            <option value="3楼">3楼</option>
-            <option value="4楼">4楼</option>
-            <option value="5楼">5楼</option>
-          </select>
+          <div class="libseat-meeting-toggle-options four" role="group" aria-label="楼层筛选">
+            <button class="libseat-meeting-toggle-option libseat-meeting-floor-option" type="button" data-value="2楼">2</button>
+            <button class="libseat-meeting-toggle-option libseat-meeting-floor-option" type="button" data-value="3楼">3</button>
+            <button class="libseat-meeting-toggle-option libseat-meeting-floor-option" type="button" data-value="4楼">4</button>
+            <button class="libseat-meeting-toggle-option libseat-meeting-floor-option" type="button" data-value="5楼">5</button>
+          </div>
         </div>
         <div class="libseat-time-field">
           <label>预约人数</label>
@@ -4515,9 +4537,8 @@
       dateInput: wrapper.querySelector(".libseat-meeting-date-input"),
       queryStart: wrapper.querySelector(".libseat-meeting-start-input"),
       queryEnd: wrapper.querySelector(".libseat-meeting-end-input"),
-      statusValue: wrapper.querySelector(".libseat-meeting-status-value"),
       statusButtons: Array.from(wrapper.querySelectorAll(".libseat-meeting-status-option")),
-      floorFilter: wrapper.querySelector(".libseat-meeting-floor-filter"),
+      floorButtons: Array.from(wrapper.querySelectorAll(".libseat-meeting-floor-option")),
       attendeesInput: wrapper.querySelector(".libseat-meeting-attendees-input"),
       queryButton: wrapper.querySelector(".libseat-meeting-query-button"),
       allRooms: [],
@@ -4537,10 +4558,10 @@
     controls.dateInput.addEventListener("input", () => {
       controls.date = controls.dateInput.value.trim();
     });
-    controls.statusButtons.forEach((button) => {
-      button.addEventListener("click", () => setMeetingStatusFilter(controls, button.dataset.value || "FREE"));
+    [...controls.statusButtons, ...controls.floorButtons].forEach((button) => {
+      button.addEventListener("click", () => toggleMeetingFilterButton(button, controls));
     });
-    [controls.floorFilter, controls.attendeesInput].forEach((input) => {
+    [controls.attendeesInput].forEach((input) => {
       input.addEventListener("input", () => renderMeetingRooms(controls));
       input.addEventListener("change", () => renderMeetingRooms(controls));
     });
