@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.20
+// @version      1.17.21
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.20";
+  const SCRIPT_VERSION = "1.17.21";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -539,14 +539,28 @@
 
       .reserve-modal .reservation-item {
         display: grid !important;
-        grid-template-columns: minmax(106px, 128px) minmax(0, 1fr) minmax(48px, 64px);
-        gap: 8px !important;
+        grid-template-columns: minmax(104px, 124px) minmax(0, 1fr) minmax(42px, 56px);
+        grid-auto-rows: minmax(0, auto) !important;
+        grid-auto-flow: column !important;
+        gap: 6px !important;
         align-items: center !important;
         min-height: 38px !important;
         padding: 9px 10px !important;
         border-bottom: 1px solid #e5e7eb !important;
         box-sizing: border-box !important;
         width: 100% !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        white-space: nowrap !important;
+      }
+
+      .reserve-modal .reservation-item > * {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
       }
 
       .reserve-modal .reservation-time {
@@ -574,12 +588,14 @@
 
       .reserve-modal .libseat-meeting-reservation-status {
         grid-column: 3;
-        display: block;
-        min-width: 0;
+        display: block !important;
+        min-width: 0 !important;
         color: #64748b;
         font-size: 12px;
-        white-space: nowrap;
+        white-space: nowrap !important;
         text-align: right;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
       }
 
       .reserve-modal .libseat-meeting-reservation-extra {
