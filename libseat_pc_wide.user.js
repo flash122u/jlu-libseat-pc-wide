@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.18
+// @version      1.17.19
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.18";
+  const SCRIPT_VERSION = "1.17.19";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -27,6 +27,7 @@
   const ACTIVE_RESERVATIONS_PATH = "/v1/users/reservations/active";
   const SEAT_RESERVATIONS_BY_DATE_PREFIX = "/v1/seats";
   const MEETING_ROOM_PATH = "/v1/meeting-room";
+  const MEETING_APPLICATION_PATH = "/v1/meeting-applications";
   const USER_DETAIL_PREFIX = "/v1/users";
   const SEAT_RESERVE_ROUTE_PREFIX = "/pages/reserve/seat-reserve/";
   const MEETING_RESERVE_ROUTE = "/pages/reserve/meeting-reserve/meeting-reserve-v2";
@@ -579,6 +580,124 @@
         font-size: 12px;
         line-height: 1.35;
         overflow-wrap: anywhere;
+      }
+
+      .reserve-modal .libseat-meeting-inline-form {
+        grid-column: 1 / span 2;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(240px, .75fr);
+        gap: 12px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #f8fafc;
+        box-sizing: border-box;
+      }
+
+      .reserve-modal .libseat-meeting-inline-main,
+      .reserve-modal .libseat-meeting-inline-side {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .reserve-modal .libseat-meeting-inline-field label,
+      .reserve-modal .libseat-meeting-inline-side-label {
+        display: block;
+        margin-bottom: 5px;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .reserve-modal .libseat-meeting-inline-input,
+      .reserve-modal .libseat-meeting-inline-textarea {
+        width: 100%;
+        border: 1px solid #d6dde8;
+        border-radius: 6px;
+        background: #fff;
+        color: #111827;
+        font: inherit;
+        font-size: 14px;
+        box-sizing: border-box;
+        outline: none;
+      }
+
+      .reserve-modal .libseat-meeting-inline-input {
+        height: 36px;
+        padding: 0 10px;
+      }
+
+      .reserve-modal .libseat-meeting-inline-textarea {
+        display: block;
+        min-height: 120px;
+        padding: 10px;
+        line-height: 1.5;
+        resize: vertical;
+      }
+
+      .reserve-modal .libseat-meeting-attendee-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+      }
+
+      .reserve-modal .libseat-meeting-inline-button {
+        height: 36px;
+        border: 1px solid #65cafd;
+        border-radius: 6px;
+        padding: 0 12px;
+        background: #65cafd;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .reserve-modal .libseat-meeting-inline-submit {
+        justify-self: end;
+        min-width: 118px;
+      }
+
+      .reserve-modal .libseat-meeting-attendee-list {
+        display: grid;
+        gap: 6px;
+        max-height: 126px;
+        overflow: auto;
+      }
+
+      .reserve-modal .libseat-meeting-attendee-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        min-height: 30px;
+        padding: 5px 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        background: #fff;
+        color: #334155;
+        font-size: 13px;
+        box-sizing: border-box;
+      }
+
+      .reserve-modal .libseat-meeting-attendee-remove {
+        border: 0;
+        background: transparent;
+        color: #64748b;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .reserve-modal .libseat-meeting-inline-status {
+        min-height: 18px;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.4;
       }
 
       .reserve-modal .meeting-step,
@@ -1946,6 +2065,31 @@
 
     if (!result.ok || !result.data || typeof result.data !== "object") return [];
     return Array.isArray(result.data.list) ? result.data.list : [];
+  }
+
+  function meetingUserFreePath(code, range) {
+    const search = new URLSearchParams({
+      startTime: range.startDateTime,
+      endTime: range.endDateTime,
+    });
+    return `${USER_DETAIL_PREFIX}/${encodeURIComponent(code)}/free?${search.toString()}`;
+  }
+
+  async function fetchMeetingFreeUser(code, range) {
+    return fetchReservationJson(meetingUserFreePath(code, range), {
+      method: "GET",
+      headers: reservationHeaders(false),
+      timeoutMs: 8000,
+    });
+  }
+
+  async function submitMeetingApplication(payload) {
+    return fetchReservationJson(MEETING_APPLICATION_PATH, {
+      method: "POST",
+      headers: reservationHeaders(true),
+      body: JSON.stringify(payload),
+      timeoutMs: 10000,
+    });
   }
 
   function userDetailPath(userId) {
@@ -5440,6 +5584,247 @@
     return false;
   }
 
+  function showPageToast(message) {
+    const text = String(message || "").trim();
+    if (!text) return;
+    const page = pageWindow();
+    try {
+      if (page.uni && typeof page.uni.showToast === "function") {
+        page.uni.showToast({ title: text, icon: "none" });
+        return;
+      }
+    } catch (error) {}
+    window.alert(text);
+  }
+
+  function meetingModalRange(modalVm) {
+    const value = completeTimeRangeValue((modalVm && modalVm.timeRange) || {}, todayText());
+    const startTime = normalizeTimeInputValue(value.startTime);
+    const endTime = normalizeTimeInputValue(value.endTime);
+    if (!isDateText(value.date)) return { error: "日期格式不正确" };
+    if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) return { error: "结束时间必须晚于开始时间" };
+    return {
+      date: value.date,
+      startTime,
+      endTime,
+      startDateTime: formatReservationDateTime(value.date, startTime),
+      endDateTime: formatReservationDateTime(value.date, endTime),
+    };
+  }
+
+  function meetingInlineState(form) {
+    if (!form.__libseatMeetingInlineState) {
+      form.__libseatMeetingInlineState = { attendees: [], submitting: false };
+    }
+    return form.__libseatMeetingInlineState;
+  }
+
+  function renderMeetingInlineAttendees(form) {
+    const state = meetingInlineState(form);
+    const list = form.querySelector(".libseat-meeting-attendee-list");
+    if (!list) return;
+    if (!state.attendees.length) {
+      list.innerHTML = `<div class="libseat-meeting-inline-status">未添加成员</div>`;
+      return;
+    }
+    list.innerHTML = state.attendees
+      .map(
+        (user, index) => `
+          <div class="libseat-meeting-attendee-item" data-index="${index}">
+            <span>${escapeHtml([user.nickname || user.name, user.code].filter(Boolean).join(" "))}</span>
+            <button class="libseat-meeting-attendee-remove" type="button" title="移除">x</button>
+          </div>
+        `
+      )
+      .join("");
+    list.querySelectorAll(".libseat-meeting-attendee-remove").forEach((button) => {
+      button.addEventListener("click", () => {
+        const item = button.closest(".libseat-meeting-attendee-item");
+        const index = Number(item && item.dataset.index);
+        if (Number.isFinite(index)) {
+          state.attendees.splice(index, 1);
+          renderMeetingInlineAttendees(form);
+        }
+      });
+    });
+  }
+
+  function meetingInlineStatus(form, message, isError) {
+    const node = form.querySelector(".libseat-meeting-inline-status-main");
+    if (!node) return;
+    node.textContent = message || "";
+    node.style.color = isError ? "#b91c1c" : "#64748b";
+  }
+
+  async function addMeetingInlineAttendee(form) {
+    const modalVm = findMeetingModalVm(form);
+    const input = form.querySelector(".libseat-meeting-attendee-code");
+    const code = cleanReservationText(input && input.value);
+    if (!code) {
+      meetingInlineStatus(form, "请输入学号", true);
+      return;
+    }
+    const range = meetingModalRange(modalVm);
+    if (range.error) {
+      meetingInlineStatus(form, range.error, true);
+      return;
+    }
+    meetingInlineStatus(form, "正在检查成员空闲状态", false);
+    const result = await fetchMeetingFreeUser(code, range);
+    if (!result.ok || !result.data || typeof result.data !== "object") {
+      meetingInlineStatus(form, `添加失败：${responseMessage(result)}`, true);
+      return;
+    }
+    const state = meetingInlineState(form);
+    const user = result.data;
+    if (state.attendees.some((item) => Number(item.id) === Number(user.id))) {
+      meetingInlineStatus(form, "该成员已添加", true);
+      return;
+    }
+    const currentUser = readStoredUserInfo();
+    if (currentUser && Number(currentUser.id) === Number(user.id)) {
+      meetingInlineStatus(form, "不能添加自己", true);
+      return;
+    }
+    state.attendees.unshift(user);
+    if (input) input.value = "";
+    renderMeetingInlineAttendees(form);
+    meetingInlineStatus(form, "成员已添加", false);
+  }
+
+  async function submitMeetingInlineApplication(form) {
+    const state = meetingInlineState(form);
+    if (state.submitting) return;
+    const modalVm = findMeetingModalVm(form);
+    const room = modalVm && (modalVm.room || modalVm.meetingRoom || modalVm.currentRoom);
+    const range = meetingModalRange(modalVm);
+    const titleInput = form.querySelector(".libseat-meeting-title-input");
+    const contentInput = form.querySelector(".libseat-meeting-content-input");
+    const meetingTitle = cleanReservationText(titleInput && titleInput.value);
+    const meetingContent = cleanReservationText(contentInput && contentInput.value);
+
+    if (!room || !room.id) {
+      meetingInlineStatus(form, "没有读取到研修间信息", true);
+      return;
+    }
+    if (range.error) {
+      meetingInlineStatus(form, range.error, true);
+      return;
+    }
+    if (!meetingTitle) {
+      meetingInlineStatus(form, "请输入会议主题", true);
+      return;
+    }
+    if (!meetingContent) {
+      meetingInlineStatus(form, "请输入会议内容", true);
+      return;
+    }
+    const minAttendees = roomMinAttendees(room);
+    const capacity = roomCapacity(room);
+    if (minAttendees > 0 && state.attendees.length + 1 < minAttendees) {
+      meetingInlineStatus(form, `至少需要 ${minAttendees} 人`, true);
+      return;
+    }
+    if (capacity > 0 && state.attendees.length + 1 > capacity) {
+      meetingInlineStatus(form, `最多允许 ${capacity} 人`, true);
+      return;
+    }
+
+    state.submitting = true;
+    meetingInlineStatus(form, "正在提交预约", false);
+    const result = await submitMeetingApplication({
+      meetingRoomId: room.id,
+      startTime: range.startDateTime,
+      endTime: range.endDateTime,
+      meetingTitle,
+      meetingContent,
+      attendees: state.attendees.map((user) => user.id),
+      scan: false,
+    });
+    state.submitting = false;
+
+    if (!result.ok) {
+      meetingInlineStatus(form, `预约失败：${responseMessage(result)}`, true);
+      return;
+    }
+    meetingInlineStatus(form, "预约成功", false);
+    showPageToast("预约成功");
+    closeMeetingModalFromNode(form);
+    if (modalVm && typeof modalVm.$emit === "function") modalVm.$emit("submit");
+  }
+
+  function ensureMeetingInlineApplicationForm(modal) {
+    const pickStep = modal.querySelector(".pick-step");
+    if (!pickStep || pickStep.querySelector(".libseat-meeting-inline-form")) return;
+    const form = document.createElement("div");
+    form.className = "libseat-meeting-inline-form";
+    form.innerHTML = `
+      <div class="libseat-meeting-inline-main">
+        <div class="libseat-meeting-inline-field">
+          <label>会议主题</label>
+          <input class="libseat-meeting-inline-input libseat-meeting-title-input" type="text" maxlength="30" autocomplete="off" placeholder="请输入会议主题">
+        </div>
+        <div class="libseat-meeting-inline-field">
+          <label>会议内容</label>
+          <textarea class="libseat-meeting-inline-textarea libseat-meeting-content-input" maxlength="100" placeholder="请输入会议内容"></textarea>
+        </div>
+      </div>
+      <div class="libseat-meeting-inline-side">
+        <div class="libseat-meeting-attendee-row">
+          <div class="libseat-meeting-inline-field">
+            <label>添加成员</label>
+            <input class="libseat-meeting-inline-input libseat-meeting-attendee-code" type="text" autocomplete="off" placeholder="输入学号">
+          </div>
+          <button class="libseat-meeting-inline-button libseat-meeting-attendee-add" type="button">添加</button>
+        </div>
+        <div>
+          <div class="libseat-meeting-inline-side-label">成员列表</div>
+          <div class="libseat-meeting-attendee-list"></div>
+        </div>
+        <div class="libseat-meeting-inline-status libseat-meeting-inline-status-main"></div>
+        <button class="libseat-meeting-inline-button libseat-meeting-inline-submit" type="button">直接预约</button>
+      </div>
+    `;
+    pickStep.appendChild(form);
+    renderMeetingInlineAttendees(form);
+    form.querySelector(".libseat-meeting-attendee-add").addEventListener("click", () => addMeetingInlineAttendee(form));
+    form.querySelector(".libseat-meeting-attendee-code").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addMeetingInlineAttendee(form);
+      }
+    });
+    form.querySelector(".libseat-meeting-inline-submit").addEventListener("click", () => submitMeetingInlineApplication(form));
+  }
+
+  function bindMeetingInlinePrimarySubmit(modal) {
+    const button = modal.querySelector(".modal-footer .btn-primary");
+    const form = modal.querySelector(".libseat-meeting-inline-form");
+    if (!button || !form || button.dataset.libseatMeetingInlineSubmit === "1") return;
+    button.dataset.libseatMeetingInlineSubmit = "1";
+    button.textContent = "预约";
+    button.addEventListener(
+      "click",
+      (event) => {
+        const modalVm = findMeetingModalVm(modal);
+        if (modalVm && Number(modalVm.step) !== 1) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+        submitMeetingInlineApplication(form);
+      },
+      true
+    );
+  }
+
+  function enhanceMeetingInlineApplicationForms() {
+    document.querySelectorAll(".reserve-modal .e-modal_show").forEach((modal) => {
+      ensureMeetingInlineApplicationForm(modal);
+      bindMeetingInlinePrimarySubmit(modal);
+    });
+  }
+
   function closeMeetingModalFromNode(node) {
     const modalVm = findMeetingModalVm(node);
     if (!modalVm) return false;
@@ -5572,6 +5957,7 @@
       cleanupMeetingModalTimeReplacements();
       document.querySelectorAll(".reserve-modal .time-section").forEach(enhanceMeetingModalTimePicker);
       bindMeetingModalOutsideClose();
+      enhanceMeetingInlineApplicationForms();
     }
 
     const blocks = new Set(
