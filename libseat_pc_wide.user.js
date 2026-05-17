@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.19
+// @version      1.17.20
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.19";
+  const SCRIPT_VERSION = "1.17.20";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -539,33 +539,42 @@
 
       .reserve-modal .reservation-item {
         display: grid !important;
-        grid-template-columns: minmax(96px, 120px) minmax(0, 1fr) minmax(48px, 64px);
+        grid-template-columns: minmax(106px, 128px) minmax(0, 1fr) minmax(48px, 64px);
         gap: 8px !important;
         align-items: center !important;
         min-height: 38px !important;
         padding: 9px 10px !important;
         border-bottom: 1px solid #e5e7eb !important;
         box-sizing: border-box !important;
+        width: 100% !important;
       }
 
       .reserve-modal .reservation-time {
         grid-column: 1;
+        display: block !important;
         min-width: 0 !important;
         color: #111827 !important;
         font-variant-numeric: tabular-nums;
         white-space: nowrap !important;
         text-align: left !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
       }
 
       .reserve-modal .reservation-user {
         grid-column: 2;
+        display: block !important;
         min-width: 0 !important;
         color: #334155 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
         overflow-wrap: anywhere !important;
       }
 
       .reserve-modal .libseat-meeting-reservation-status {
         grid-column: 3;
+        display: block;
         min-width: 0;
         color: #64748b;
         font-size: 12px;
@@ -2154,13 +2163,15 @@
   function reservationTimeText(reservation) {
     if (!reservation || typeof reservation !== "object") return "";
 
+    const raw = cleanReservationText(reservation.time || "");
+    const times = raw.match(/\d{2}:\d{2}/g);
+    if (times && times.length >= 2) return `${times[0]}-${times[times.length - 1]}`;
+
     const start = String(reservation.startTime || "").match(/(\d{2}:\d{2})/);
     const end = String(reservation.endTime || "").match(/(\d{2}:\d{2})/);
     if (start && end) return `${start[1]}-${end[1]}`;
 
-    const raw = cleanReservationText(reservation.time || "");
-    const times = raw.match(/\d{2}:\d{2}/g);
-    return times && times.length >= 2 ? `${times[0]}-${times[times.length - 1]}` : raw;
+    return raw;
   }
 
   function reservationUserFallback(reservation) {
