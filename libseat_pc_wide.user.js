@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.24
+// @version      1.18.0
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.24";
+  const SCRIPT_VERSION = "1.18.0";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -30,6 +30,7 @@
   const MEETING_APPLICATION_PATH = "/v1/meeting-applications";
   const USER_DETAIL_PREFIX = "/v1/users";
   const SEAT_RESERVE_ROUTE_PREFIX = "/pages/reserve/seat-reserve/";
+  const SEAT_ROOM_ROUTE = "/pages/reserve/seat-reserve/seat-reserve-v2";
   const MEETING_RESERVE_ROUTE = "/pages/reserve/meeting-reserve/meeting-reserve-v2";
   const DEFAULT_RESERVATION_RETRIES = 3;
   const DEFAULT_RESERVATION_RETRY_INTERVAL_MS = 500;
@@ -100,6 +101,202 @@
       .paging {
         width: 100% !important;
         box-sizing: border-box !important;
+      }
+
+      .libseat-home-page uni-page-body {
+        background: #f5f7fa !important;
+      }
+
+      .libseat-home-page .container {
+        max-width: 1180px !important;
+        min-height: calc(100vh - 64px) !important;
+        padding: 24px 32px 40px !important;
+        background: #f5f7fa !important;
+      }
+
+      .libseat-home-page .top-img {
+        display: block !important;
+        width: min(100%, 1120px) !important;
+        height: 220px !important;
+        margin: 0 auto !important;
+        border-radius: 8px !important;
+        object-fit: cover !important;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .libseat-home-page .message {
+        position: relative !important;
+        top: auto !important;
+        width: min(100%, 1120px) !important;
+        height: 44px !important;
+        margin: 12px auto 0 !important;
+        padding: 0 14px !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+        box-sizing: border-box !important;
+      }
+
+      .libseat-home-page .message .message-icon {
+        width: 18px !important;
+        height: 18px !important;
+        margin-left: 0 !important;
+      }
+
+      .libseat-home-page .message .message-text,
+      .libseat-home-page .message .message-more-text {
+        font-size: 13px !important;
+        line-height: 20px !important;
+      }
+
+      .libseat-home-page .message .message-more .more-icon {
+        width: 10px !important;
+        height: 10px !important;
+      }
+
+      .libseat-home-page .function-list {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+        gap: 16px !important;
+        width: min(100%, 1120px) !important;
+        margin: 18px auto 0 !important;
+        z-index: auto !important;
+      }
+
+      .libseat-home-page .function-list .function-item {
+        width: auto !important;
+        min-height: 164px !important;
+        padding: 18px !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05) !important;
+        box-sizing: border-box !important;
+        cursor: pointer !important;
+      }
+
+      .libseat-home-page .function-list .function-item:hover {
+        border-color: #65cafd !important;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .libseat-home-page .function-list .function-item-image {
+        width: 100% !important;
+        height: 112px !important;
+        border-radius: 8px !important;
+        object-fit: cover !important;
+        box-shadow: none !important;
+      }
+
+      .libseat-home-page .function-list .function-item-text {
+        margin-top: 12px !important;
+        color: #111827 !important;
+        font-size: 15px !important;
+        font-weight: 700 !important;
+        line-height: 22px !important;
+        text-align: left !important;
+      }
+
+      .libseat-seat-room-page uni-page-body {
+        background: #f5f7fa !important;
+      }
+
+      .libseat-seat-room-page .paging.container {
+        max-width: 1180px !important;
+        margin: 0 auto !important;
+        padding: 18px 28px 28px !important;
+        background: #f5f7fa !important;
+      }
+
+      .libseat-seat-room-page .header {
+        width: min(100%, 1120px) !important;
+        margin: 0 auto 14px !important;
+        padding: 14px 16px !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+        box-sizing: border-box !important;
+      }
+
+      .libseat-seat-room-page .header .title {
+        margin-bottom: 10px !important;
+        color: #111827 !important;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        line-height: 26px !important;
+      }
+
+      .libseat-seat-room-page .room-page-header {
+        margin: 0 !important;
+      }
+
+      .libseat-seat-room-page .zp-scroll-view-super {
+        width: min(100%, 1120px) !important;
+        margin: 0 auto !important;
+      }
+
+      .libseat-seat-room-page .reading-room > .list {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+        width: min(100%, 1120px) !important;
+        margin: 0 auto !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item {
+        min-height: 136px !important;
+        margin-bottom: 0 !important;
+        padding: 14px !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        background-image: none !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item:hover {
+        border-color: #65cafd !important;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07) !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item__cover {
+        width: 76px !important;
+        height: 76px !important;
+        border-radius: 8px !important;
+        object-fit: cover !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item__name {
+        margin-bottom: 8px !important;
+        color: #111827 !important;
+        font-size: 15px !important;
+        line-height: 22px !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item__description {
+        margin-bottom: 4px !important;
+        color: #475569 !important;
+        font-size: 12px !important;
+        line-height: 18px !important;
+      }
+
+      .libseat-seat-room-page .reading-room-item__status {
+        font-size: 12px !important;
+        line-height: 24px !important;
+      }
+
+      .libseat-seat-room-page .btn {
+        display: none !important;
+      }
+
+      @media screen and (max-width: 1100px) {
+        .libseat-seat-room-page .reading-room > .list {
+          grid-template-columns: 1fr !important;
+        }
       }
 
       .wapper-pc,
@@ -1468,6 +1665,8 @@
 
   function applyPcWideClass() {
     document.documentElement.classList.add("libseat-pc-wide");
+    document.documentElement.classList.toggle("libseat-home-page", isHomePage());
+    document.documentElement.classList.toggle("libseat-seat-room-page", isSeatRoomSelectPage());
     document.documentElement.classList.toggle("libseat-meeting-page", isMeetingReservePage());
     document.documentElement.classList.toggle("libseat-seat-reserve-page", isSeatReservePage());
   }
@@ -1478,6 +1677,22 @@
 
   function isSeatReservePage() {
     return currentRouteText().includes(SEAT_RESERVE_ROUTE_PREFIX) || !!document.querySelector(".seatBox-pc, .seatBox");
+  }
+
+  function isSeatRoomSelectPage() {
+    return (
+      currentRouteText().includes(SEAT_ROOM_ROUTE) ||
+      (!!document.querySelector(".reading-room .list .reading-room-item") && !document.querySelector(".seatBox-pc, .seatBox"))
+    );
+  }
+
+  function isHomePage() {
+    const route = currentRouteText();
+    return (
+      route === "/" ||
+      route.includes("/pages/index/index") ||
+      (!!document.querySelector(".top-img") && !!document.querySelector(".function-list"))
+    );
   }
 
   function isMeetingReservePage() {
@@ -3292,6 +3507,77 @@
       node = node.parentElement;
     }
     return null;
+  }
+
+  function findSeatRoomPageVm(root) {
+    let node = root || document.querySelector(".reading-room");
+    while (node) {
+      let vm = node.__vue__;
+      while (vm) {
+        if (
+          Array.isArray(vm.dataList) &&
+          typeof vm.chooseRoom === "function" &&
+          typeof vm.nextStep === "function"
+        ) {
+          return vm;
+        }
+        vm = vm.$parent;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function openSeatRoomFromCard(card) {
+    if (!card || card.dataset.libseatOpening === "1") return false;
+    const cards = Array.from(document.querySelectorAll(".reading-room .list .reading-room-item"));
+    const index = cards.indexOf(card);
+    if (index < 0) return false;
+
+    const vm = findSeatRoomPageVm(card);
+    if (!vm || !Array.isArray(vm.dataList) || !vm.dataList[index]) return false;
+
+    card.dataset.libseatOpening = "1";
+    try {
+      vm.chooseRoom(index);
+      if (typeof vm.$set === "function") {
+        vm.$set(vm, "chooseIndex", index);
+      } else {
+        vm.chooseIndex = index;
+      }
+      if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
+      setTimeout(() => {
+        try {
+          vm.nextStep();
+        } finally {
+          delete card.dataset.libseatOpening;
+        }
+      }, 0);
+      return true;
+    } catch (error) {
+      delete card.dataset.libseatOpening;
+      debugFacilityAssets("seat room direct open failed", { message: error && error.message });
+      return false;
+    }
+  }
+
+  function bindSeatRoomDirectOpen() {
+    if (!isSeatRoomSelectPage()) return;
+    document.querySelectorAll(".reading-room .list .reading-room-item").forEach((card) => {
+      if (card.dataset.libseatDirectOpenBound === "1") return;
+      card.dataset.libseatDirectOpenBound = "1";
+      card.setAttribute("title", "点击进入选座");
+      card.addEventListener(
+        "click",
+        (event) => {
+          if (event.cancelable) event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+          openSeatRoomFromCard(card);
+        },
+        true
+      );
+    });
   }
 
   function facilityTypeImage(type) {
@@ -6102,6 +6388,7 @@
     if (isMeetingReservePage()) {
       hideMeetingLoadMoreNodes();
     }
+    bindSeatRoomDirectOpen();
     queueClassifySeatMap();
     replaceSeatLegend();
     enhanceTimePickers();
