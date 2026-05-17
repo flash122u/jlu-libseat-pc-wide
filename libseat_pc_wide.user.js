@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.7
+// @version      1.17.9
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.7";
+  const SCRIPT_VERSION = "1.17.9";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -26,7 +26,10 @@
   const RESERVATION_SUBMIT_PATH = "/v1/seat-applications";
   const ACTIVE_RESERVATIONS_PATH = "/v1/users/reservations/active";
   const SEAT_RESERVATIONS_BY_DATE_PREFIX = "/v1/seats";
+  const MEETING_ROOM_PATH = "/v1/meeting-room";
   const USER_DETAIL_PREFIX = "/v1/users";
+  const SEAT_RESERVE_ROUTE_PREFIX = "/pages/reserve/seat-reserve/";
+  const MEETING_RESERVE_ROUTE = "/pages/reserve/meeting-reserve/meeting-reserve-v2";
   const DEFAULT_RESERVATION_RETRIES = 3;
   const DEFAULT_RESERVATION_RETRY_INTERVAL_MS = 500;
   const AUTO_RESERVATION_SUBMIT_MINUTES = 21 * 60;
@@ -47,8 +50,10 @@
   let replacementIndex = 0;
   let enhanceQueued = false;
   let seatMapLayoutQueued = false;
+  let meetingRoomState = null;
   const RANGE_PICKER_SELECTOR =
     "body > uni-app > uni-page > uni-page-wrapper > uni-page-body > uni-view > uni-view.paging > uni-view > uni-view";
+  const REQUEST_TIME_GUARD_SCRIPT_ID = "libseat-pc-wide-request-time-guard";
   const PAGE_BRIDGE_SCRIPT_ID = "libseat-pc-wide-page-bridge";
   const css = `
     @media screen and (min-width: 768px), screen and (hover: hover) and (pointer: fine) {
@@ -257,6 +262,180 @@
 
       .range-picker {
         margin-bottom: 12px !important;
+      }
+
+      .libseat-meeting-page .header,
+      .libseat-meeting-page .header .title,
+      .libseat-meeting-page .header .room-page-header {
+        display: none !important;
+      }
+
+      .libseat-meeting-page .z-paging-content,
+      .libseat-meeting-page .zp-scroll-view-super,
+      .libseat-meeting-page uni-scroll-view,
+      .libseat-meeting-page .zp-paging-container {
+        overflow: auto !important;
+        pointer-events: auto !important;
+      }
+
+      .libseat-meeting-page .z-paging-load-more,
+      .libseat-meeting-page .zp-load-more,
+      .libseat-meeting-page [class*="load-more"],
+      .libseat-meeting-page [class*="loading-more"] {
+        display: none !important;
+      }
+
+      .libseat-meeting-custom-active .meeting-room > .list {
+        display: none !important;
+      }
+
+      .libseat-meeting-query {
+        display: grid;
+        grid-template-columns: minmax(128px, .8fr) minmax(88px, .45fr) minmax(88px, .45fr) minmax(118px, .6fr) minmax(100px, .55fr) minmax(96px, .45fr) minmax(96px, .45fr) auto;
+        align-items: end;
+        gap: 8px;
+      }
+
+      .libseat-meeting-query .libseat-time-field {
+        min-width: 0;
+      }
+
+      .libseat-meeting-query input,
+      .libseat-meeting-query select {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #d6dde8;
+        border-radius: 6px;
+        padding: 0 8px;
+        box-sizing: border-box;
+        background: #fff;
+        color: #111827;
+        font-size: 13px;
+        outline: none;
+      }
+
+      .libseat-meeting-query input:focus,
+      .libseat-meeting-query select:focus {
+        border-color: #65cafd;
+        box-shadow: 0 0 0 2px rgba(101, 202, 253, .18);
+      }
+
+      .libseat-meeting-room-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 8px;
+        padding-bottom: 18px;
+      }
+
+      .libseat-meeting-room-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        min-height: 0;
+        padding: 8px 10px;
+        border: 1px solid #e6ebf2;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(31, 41, 55, 0.04);
+        box-sizing: border-box;
+        color: inherit;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+        appearance: none;
+      }
+
+      .libseat-meeting-room-card:hover {
+        border-color: #65cafd;
+      }
+
+      .libseat-meeting-room-card.unavailable {
+        cursor: default;
+      }
+
+      .libseat-meeting-room-name {
+        margin-bottom: 3px;
+        color: #111827;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .libseat-meeting-room-meta {
+        overflow: hidden;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .libseat-meeting-room-status {
+        align-self: start;
+        min-width: 52px;
+        padding: 0 6px;
+        border: 1px solid currentColor;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 24px;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .libseat-meeting-room-free-30 {
+        border-color: #f59e0b !important;
+        background: #fffbeb !important;
+      }
+
+      .libseat-meeting-room-free-30 .libseat-meeting-room-status {
+        color: #b45309;
+        background: #fef3c7;
+      }
+
+      .libseat-meeting-room-free-60 {
+        border-color: #eab308 !important;
+        background: #fefce8 !important;
+      }
+
+      .libseat-meeting-room-free-60 .libseat-meeting-room-status {
+        color: #854d0e;
+        background: #fef9c3;
+      }
+
+      .libseat-meeting-room-free-120 {
+        border-color: #22c55e !important;
+        background: #f0fdf4 !important;
+      }
+
+      .libseat-meeting-room-free-120 .libseat-meeting-room-status {
+        color: #047857;
+        background: #dcfce7;
+      }
+
+      .libseat-meeting-room-unavailable {
+        border-color: #ef4444 !important;
+        background: #fef2f2 !important;
+      }
+
+      .libseat-meeting-room-unavailable .libseat-meeting-room-status {
+        color: #b91c1c;
+        background: #fee2e2;
+      }
+
+      .libseat-meeting-room-empty {
+        padding: 22px 12px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 14px;
+        text-align: center;
+      }
+
+      .libseat-meeting-slot-grid {
+        display: grid;
+        grid-template-columns: minmax(140px, 1fr) minmax(96px, .7fr) minmax(96px, .7fr);
+        gap: 8px;
       }
 
       .seat-reserve-modal .seat-modal-body {
@@ -943,6 +1122,23 @@
 
   function applyPcWideClass() {
     document.documentElement.classList.add("libseat-pc-wide");
+    document.documentElement.classList.toggle("libseat-meeting-page", isMeetingReservePage());
+    document.documentElement.classList.toggle("libseat-seat-reserve-page", isSeatReservePage());
+  }
+
+  function currentRouteText() {
+    return `${window.location.pathname || ""}${window.location.hash || ""}${window.location.search || ""}`;
+  }
+
+  function isSeatReservePage() {
+    return currentRouteText().includes(SEAT_RESERVE_ROUTE_PREFIX) || !!document.querySelector(".seatBox-pc, .seatBox");
+  }
+
+  function isMeetingReservePage() {
+    return (
+      currentRouteText().includes(MEETING_RESERVE_ROUTE) ||
+      (!!document.querySelector(".meeting-room") && !!document.querySelector(".meeting-room-item, .room-page-header"))
+    );
   }
 
   function debugStartup() {
@@ -1501,6 +1697,36 @@
     });
   }
 
+  function meetingRoomPagePath(params) {
+    const search = new URLSearchParams();
+    Object.keys(params || {}).forEach((key) => {
+      const value = params[key];
+      if (value === undefined || value === null) return;
+      search.set(key, value);
+    });
+    return `${MEETING_ROOM_PATH}?${search.toString()}`;
+  }
+
+  async function fetchMeetingRoomsDirect(range) {
+    const result = await fetchReservationJson(
+      meetingRoomPagePath({
+        limit: 500,
+        offset: 0,
+        startTime: range.startDateTime,
+        endTime: range.endDateTime,
+        parentIdPath: "",
+      }),
+      {
+        method: "GET",
+        headers: reservationHeaders(false),
+        timeoutMs: 10000,
+      }
+    );
+
+    if (!result.ok || !result.data || typeof result.data !== "object") return [];
+    return Array.isArray(result.data.list) ? result.data.list : [];
+  }
+
   function userDetailPath(userId) {
     return `${USER_DETAIL_PREFIX}/${encodeURIComponent(userId)}/detail`;
   }
@@ -1618,6 +1844,224 @@
     }
   }
 
+  function installRequestTimeGuard() {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    if (
+      pageWindow.__libseatPcWideRequestGuard &&
+      pageWindow.__libseatPcWideRequestGuard.version === SCRIPT_VERSION
+    ) {
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = REQUEST_TIME_GUARD_SCRIPT_ID;
+    script.textContent = `
+      (function () {
+        if (window.__libseatPcWideRequestGuard && window.__libseatPcWideRequestGuard.version === "${SCRIPT_VERSION}") return;
+
+        var BAD_TIME_RE = /(?:^|\\s)(undefined|null|nan|invalid\\s*date)\\s*$/i;
+        var DATE_RE = /(\\d{4}-\\d{2}-\\d{2})/;
+        var TIME_AT_END_RE = /(?:^|\\s)([01]\\d|2[0-3]):[0-5]\\d$/;
+
+        function dateFrom(value, fallbackDate) {
+          var match = String(value == null ? "" : value).match(DATE_RE);
+          if (match) return match[1];
+          return DATE_RE.test(String(fallbackDate || "")) ? String(fallbackDate).match(DATE_RE)[1] : "";
+        }
+
+        function isBrokenDateTime(value) {
+          var text = String(value == null ? "" : value).trim();
+          if (!text) return true;
+          if (BAD_TIME_RE.test(text)) return true;
+          return DATE_RE.test(text) && !TIME_AT_END_RE.test(text);
+        }
+
+        function fallbackTime(field) {
+          return String(field || "").toLowerCase() === "endtime" ? "22:00" : "08:00";
+        }
+
+        function fixedDateTime(value, field, fallbackDate) {
+          if (!isBrokenDateTime(value)) return value;
+          var date = dateFrom(value, fallbackDate);
+          return date ? date + " " + fallbackTime(field) : value;
+        }
+
+        function objectFallbackDate(object) {
+          if (!object || typeof object !== "object") return "";
+          var candidates = [
+            object.date,
+            object.reserveDate,
+            object.reservationDate,
+            object.startDate,
+            object.endDate,
+            object.startTime,
+            object.endTime
+          ];
+          for (var i = 0; i < candidates.length; i += 1) {
+            var date = dateFrom(candidates[i], "");
+            if (date) return date;
+          }
+          return "";
+        }
+
+        function sanitizeObject(object, depth) {
+          if (!object || typeof object !== "object" || depth > 4) return false;
+          var changed = false;
+          var fallbackDate = objectFallbackDate(object);
+
+          Object.keys(object).forEach(function (key) {
+            var value = object[key];
+            var lower = String(key).toLowerCase();
+            if (lower === "starttime" || lower === "endtime") {
+              var fixed = fixedDateTime(value, lower, fallbackDate);
+              if (fixed !== value) {
+                object[key] = fixed;
+                changed = true;
+              }
+              return;
+            }
+            if (value && typeof value === "object") {
+              changed = sanitizeObject(value, depth + 1) || changed;
+            }
+          });
+
+          return changed;
+        }
+
+        function sanitizeSearchParams(params) {
+          var changed = false;
+          var fallbackDate =
+            dateFrom(params.get("date"), "") ||
+            dateFrom(params.get("reserveDate"), "") ||
+            dateFrom(params.get("reservationDate"), "") ||
+            dateFrom(params.get("startTime"), "") ||
+            dateFrom(params.get("endTime"), "");
+
+          ["startTime", "endTime"].forEach(function (key) {
+            if (!params.has(key)) return;
+            var value = params.get(key);
+            var fixed = fixedDateTime(value, key, fallbackDate);
+            if (fixed !== value) {
+              params.set(key, fixed);
+              changed = true;
+            }
+          });
+
+          return changed;
+        }
+
+        function sanitizeUrl(input) {
+          if (input == null) return input;
+          var raw = String(input);
+          try {
+            var url = new URL(raw, window.location.href);
+            return sanitizeSearchParams(url.searchParams) ? url.toString() : input;
+          } catch (error) {
+            return input;
+          }
+        }
+
+        function sanitizedBody(body) {
+          if (body == null) return { body: body, changed: false };
+
+          if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) {
+            var nextParams = new URLSearchParams(body.toString());
+            return sanitizeSearchParams(nextParams)
+              ? { body: nextParams, changed: true }
+              : { body: body, changed: false };
+          }
+
+          if (typeof FormData !== "undefined" && body instanceof FormData) {
+            var nextForm = null;
+            ["startTime", "endTime"].forEach(function (key) {
+              if (!body.has(key)) return;
+              var value = body.get(key);
+              var fixed = fixedDateTime(value, key, dateFrom(body.get("date"), "") || dateFrom(value, ""));
+              if (fixed === value) return;
+              if (!nextForm) nextForm = new FormData(body);
+              nextForm.set(key, fixed);
+            });
+            return nextForm ? { body: nextForm, changed: true } : { body: body, changed: false };
+          }
+
+          if (typeof body !== "string") return { body: body, changed: false };
+
+          try {
+            var parsed = JSON.parse(body);
+            if (sanitizeObject(parsed, 0)) {
+              return { body: JSON.stringify(parsed), changed: true };
+            }
+          } catch (error) {}
+
+          try {
+            var params = new URLSearchParams(body);
+            if (sanitizeSearchParams(params)) {
+              return { body: params.toString(), changed: true };
+            }
+          } catch (error) {}
+
+          return { body: body, changed: false };
+        }
+
+        var nativeFetch = window.fetch;
+        if (typeof nativeFetch === "function" && !nativeFetch.__libseatPcWideGuarded) {
+          var guardedFetch = function (input, init) {
+            var nextInput = input;
+            var nextInit = init;
+
+            try {
+              if (typeof input === "string" || input instanceof URL) {
+                nextInput = sanitizeUrl(input);
+              }
+
+              if (init && Object.prototype.hasOwnProperty.call(init, "body")) {
+                var fixedBody = sanitizedBody(init.body);
+                if (fixedBody.changed) {
+                  nextInit = Object.assign({}, init, { body: fixedBody.body });
+                }
+              }
+            } catch (error) {}
+
+            return nativeFetch.call(this, nextInput, nextInit);
+          };
+          guardedFetch.__libseatPcWideGuarded = true;
+          window.fetch = guardedFetch;
+        }
+
+        if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+          var proto = window.XMLHttpRequest.prototype;
+          var nativeOpen = proto.open;
+          var nativeSend = proto.send;
+
+          if (typeof nativeOpen === "function" && !nativeOpen.__libseatPcWideGuarded) {
+            proto.open = function (method, url) {
+              if (arguments.length >= 2) {
+                arguments[1] = sanitizeUrl(url);
+              }
+              return nativeOpen.apply(this, arguments);
+            };
+            proto.open.__libseatPcWideGuarded = true;
+          }
+
+          if (typeof nativeSend === "function" && !nativeSend.__libseatPcWideGuarded) {
+            proto.send = function (body) {
+              if (arguments.length >= 1) {
+                var fixedBody = sanitizedBody(body);
+                if (fixedBody.changed) arguments[0] = fixedBody.body;
+              }
+              return nativeSend.apply(this, arguments);
+            };
+            proto.send.__libseatPcWideGuarded = true;
+          }
+        }
+
+        window.__libseatPcWideRequestGuard = { version: "${SCRIPT_VERSION}" };
+      })();
+    `;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  }
+
   function installPageBridge() {
     const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
     if (pageWindow.__libseatPcWideBridge && pageWindow.__libseatPcWideBridge.version === SCRIPT_VERSION) return;
@@ -1693,12 +2137,21 @@
 
         function copyRule(rule) {
           if (!rule) return {};
-          return {
+          return Object.assign({}, rule, {
             minDurationMinutes: rule.minDurationMinutes,
             maxDurationMinutes: rule.maxDurationMinutes,
+            minAttendees: rule.minAttendees,
+            maxAttendees: rule.maxAttendees,
+            needApproval: rule.needApproval,
+            needMaterial: rule.needMaterial,
             availableStartTime: rule.availableStartTime,
             availableEndTime: rule.availableEndTime
-          };
+          });
+        }
+
+        function copyMeetingRoom(room) {
+          if (!room) return null;
+          return Object.assign({}, room, { rule: copyRule(room.rule) });
         }
 
         function snapshot(root) {
@@ -1759,6 +2212,144 @@
             node = node.parentElement;
           }
           return null;
+        }
+
+        function isMeetingReserveVm(vm) {
+          return !!(
+            vm &&
+            Array.isArray(vm.dataList) &&
+            vm.timeRange &&
+            typeof vm.queryList === "function" &&
+            typeof vm.chooseRoom === "function" &&
+            Object.prototype.hasOwnProperty.call(vm, "visible")
+          );
+        }
+
+        function findMeetingPageVm(root) {
+          return walkVue(root || document.body, isMeetingReserveVm);
+        }
+
+        function meetingSnapshot(root) {
+          var vm = findMeetingPageVm(root || document.body);
+          if (!vm) return null;
+          return {
+            parentIdPath: vm.parentIdPath || "",
+            timeRange: vm.timeRange ? {
+              date: vm.timeRange.date,
+              startTime: vm.timeRange.startTime,
+              endTime: vm.timeRange.endTime
+            } : null,
+            rooms: Array.isArray(vm.dataList) ? vm.dataList.map(copyMeetingRoom) : []
+          };
+        }
+
+        function collectMeetingRooms(range, pageSize) {
+          var vm = findMeetingPageVm(document.body);
+          if (!vm || typeof vm.queryList !== "function") return Promise.resolve(null);
+
+          var paging = vm.$refs && vm.$refs.paging;
+          var nativeComplete = paging && paging.complete;
+          var nativeCompleteByNoMore = paging && paging.completeByNoMore;
+          var nativeCompleteByTotal = paging && paging.completeByTotal;
+          var nativeSetLocalPaging = paging && paging.setLocalPaging;
+          var rooms = [];
+          var seen = {};
+          var size = Math.max(Number(pageSize) || 10, 1);
+          var pageNo = 1;
+          var safety = 0;
+
+          function append(list) {
+            if (!Array.isArray(list)) return 0;
+            var added = 0;
+            for (var i = 0; i < list.length; i += 1) {
+              var room = list[i];
+              var key = String(room && room.id);
+              if (seen[key]) continue;
+              seen[key] = true;
+              rooms.push(room);
+              added += 1;
+            }
+            return added;
+          }
+
+          function replacePagingComplete() {
+            if (!paging) return;
+            paging.complete = function (list) { append(list); };
+            paging.completeByNoMore = function (list) { append(list); };
+            paging.completeByTotal = function (list) { append(list); };
+            paging.setLocalPaging = function (list) { append(list); };
+          }
+
+          function restorePagingComplete() {
+            if (!paging) return;
+            if (typeof nativeComplete === "function") paging.complete = nativeComplete;
+            if (typeof nativeCompleteByNoMore === "function") paging.completeByNoMore = nativeCompleteByNoMore;
+            if (typeof nativeCompleteByTotal === "function") paging.completeByTotal = nativeCompleteByTotal;
+            if (typeof nativeSetLocalPaging === "function") paging.setLocalPaging = nativeSetLocalPaging;
+          }
+
+          if (vm.timeRange && range) {
+            setReactive(vm, "timeRange", Object.assign({}, vm.timeRange, {
+              date: range.date,
+              startTime: range.startTime,
+              endTime: range.endTime
+            }));
+          }
+          if (Object.prototype.hasOwnProperty.call(vm, "parentIdPath")) setReactive(vm, "parentIdPath", null);
+          replacePagingComplete();
+
+          return new Promise(function (resolve) {
+            function finish() {
+              restorePagingComplete();
+              resolve({
+                rooms: rooms.map(copyMeetingRoom),
+                timeRange: range || null
+              });
+            }
+
+            function next() {
+              var before = rooms.length;
+              safety += 1;
+              if (safety > 120) {
+                finish();
+                return;
+              }
+
+              Promise.resolve(vm.queryList(pageNo, size)).then(function () {
+                var added = rooms.length - before;
+                if (added < size) {
+                  finish();
+                  return;
+                }
+                pageNo += 1;
+                next();
+              }).catch(function () {
+                finish();
+              });
+            }
+
+            next();
+          });
+        }
+
+        function openMeetingRoom(rooms, index, timeRange) {
+          var vm = findMeetingPageVm(document.body);
+          if (!vm || !Array.isArray(rooms)) return false;
+          var list = rooms.slice();
+          var targetIndex = Number(index);
+          if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= list.length) return false;
+          setReactive(vm, "dataList", list);
+          if (vm.timeRange && timeRange) {
+            setReactive(vm, "timeRange", Object.assign({}, vm.timeRange, timeRange));
+          }
+          if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", targetIndex);
+          try {
+            vm.chooseRoom(targetIndex);
+          } catch (error) {
+            setReactive(vm, "visible", true);
+          }
+          if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
+          return true;
         }
 
         function callSeatOpenMethod(vm, seat) {
@@ -1876,6 +2467,9 @@
           version: "${SCRIPT_VERSION}",
           snapshot: snapshot,
           modalSnapshot: modalSnapshot,
+          meetingSnapshot: meetingSnapshot,
+          collectMeetingRooms: collectMeetingRooms,
+          openMeetingRoom: openMeetingRoom,
           openSeatDetail: openSeatDetail
         };
       })();
@@ -2161,6 +2755,19 @@
     };
   }
 
+  function findMeetingModalVm(block) {
+    let node = block;
+    while (node) {
+      let vm = node.__vue__;
+      while (vm) {
+        if (Array.isArray(vm.reservations) && vm.timeRange && (vm.room || vm.meetingRoom || vm.currentRoom)) return vm;
+        vm = vm.$parent;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   function findReservationModalVm(block) {
     let node = block;
     while (node) {
@@ -2217,11 +2824,50 @@
     }
   }
 
+  function meetingPageSnapshot(root) {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const bridge = pageWindow.__libseatPcWideBridge;
+    if (!bridge || typeof bridge.meetingSnapshot !== "function") return null;
+
+    try {
+      return bridge.meetingSnapshot(root || document.body);
+    } catch (error) {
+      debugFacilityAssets("meeting bridge snapshot failed", { message: error && error.message });
+      return null;
+    }
+  }
+
+  async function collectMeetingRoomsFromPage(range) {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const bridge = pageWindow.__libseatPcWideBridge;
+    if (!bridge || typeof bridge.collectMeetingRooms !== "function") return null;
+
+    try {
+      return await bridge.collectMeetingRooms(range, 10);
+    } catch (error) {
+      debugFacilityAssets("meeting bridge collect failed", { message: error && error.message });
+      return null;
+    }
+  }
+
+  function openMeetingRoomFromPage(rooms, index, range) {
+    const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const bridge = pageWindow.__libseatPcWideBridge;
+    if (!bridge || typeof bridge.openMeetingRoom !== "function") return false;
+
+    try {
+      return bridge.openMeetingRoom(rooms, index, range);
+    } catch (error) {
+      debugFacilityAssets("meeting bridge open failed", { message: error && error.message });
+      return false;
+    }
+  }
+
   function enhanceReservationUserLabels() {
     document
-      .querySelectorAll(".seat-reserve-modal .e-modal_show .seat-reservations-list")
+      .querySelectorAll(".seat-reserve-modal .e-modal_show .seat-reservations-list, .reserve-modal .e-modal_show .seat-reservations-list")
       .forEach((list) => {
-        const modalVm = findReservationModalVm(list);
+        const modalVm = findReservationModalVm(list) || findMeetingModalVm(list);
         if (!modalVm || !Array.isArray(modalVm.reservations)) return;
 
         const labels = Array.from(list.querySelectorAll(".seat-reservation-user"));
@@ -2803,6 +3449,28 @@
     });
   }
 
+  function bindPlainDateInput(nativeInput) {
+    if (nativeInput.dataset.libseatBound) return;
+    nativeInput.dataset.libseatBound = "1";
+    nativeInput.addEventListener("focus", () => {
+      const wrapper = nativeInput.closest(".libseat-time-replacement, .libseat-slot-replacement");
+      if (wrapper) wrapper.dataset.libseatFocused = "1";
+      window.setTimeout(() => nativeInput.select(), 0);
+    });
+    nativeInput.addEventListener("click", () => {
+      nativeInput.select();
+    });
+    nativeInput.addEventListener("blur", () => {
+      const wrapper = nativeInput.closest(".libseat-time-replacement, .libseat-slot-replacement");
+      if (wrapper) wrapper.dataset.libseatFocused = "";
+      if (!isDateText(nativeInput.value)) nativeInput.value = todayText();
+    });
+    nativeInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      nativeInput.blur();
+    });
+  }
+
   function bindReserveSeatInput(input) {
     input.addEventListener("focus", () => {
       input.closest(".libseat-time-replacement").dataset.libseatFocused = "1";
@@ -3003,6 +3671,215 @@
   function syncQueryRefreshStatus(controls) {
     if (!controls || !controls.lastQueryRange || controls.queryStatus.dataset.libseatTone !== "success") return;
     controls.queryStatus.textContent = queryRefreshStatusText(controls.lastQueryRange);
+  }
+
+  function meetingRangeFromControls(controls) {
+    const date = String((controls.dateInput && controls.dateInput.value) || controls.date || todayText()).trim();
+    const startTime = normalizeTimeInputValue(controls.queryStart.value || "");
+    const endTime = normalizeTimeInputValue(controls.queryEnd.value || "");
+
+    if (!isDateText(date)) return { error: "日期格式不正确" };
+    if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
+    controls.date = date;
+    controls.dateInput.value = date;
+    controls.queryStart.value = startTime;
+    controls.queryEnd.value = endTime;
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) return { error: "结束时间必须晚于开始时间" };
+
+    return {
+      date,
+      startTime,
+      endTime,
+      startDateTime: formatReservationDateTime(date, startTime),
+      endDateTime: formatReservationDateTime(date, endTime),
+    };
+  }
+
+  function numericInputValue(input) {
+    const text = String((input && input.value) || "").trim();
+    if (!text) return null;
+    const value = Number(text);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function normalizedRoomStatus(room) {
+    return String((room && room.status) || "").trim().toUpperCase().replace(/[-_]+/g, " ");
+  }
+
+  function roomRule(room) {
+    return (room && room.rule && typeof room.rule === "object" ? room.rule : {}) || {};
+  }
+
+  function roomMinAttendees(room) {
+    const value = Number(roomRule(room).minAttendees);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function roomCapacity(room) {
+    const value = Number(roomRule(room).maxAttendees || (room && room.capacity));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function roomAvailableMinutes(room, range) {
+    if (!room || room.canReserve === false || normalizedRoomStatus(room) !== "FREE") return 0;
+    const queryStart = timeToMinutes(range && range.startTime);
+    const queryEnd = timeToMinutes(range && range.endTime);
+    if (queryStart === null || queryEnd === null || queryEnd <= queryStart) return 0;
+
+    const roomOpen = timeToMinutes(room.openTime);
+    const roomClose = timeToMinutes(room.closeTime);
+    const start = roomOpen === null ? queryStart : Math.max(queryStart, roomOpen);
+    const end = roomClose === null ? queryEnd : Math.min(queryEnd, roomClose);
+    return Math.max(0, end - start);
+  }
+
+  function meetingRoomAvailabilityClass(room, range) {
+    const minutes = roomAvailableMinutes(room, range);
+    if (minutes < DEFAULT_MIN_RESERVATION_MINUTES) return "libseat-meeting-room-unavailable";
+    if (minutes >= 120) return "libseat-meeting-room-free-120";
+    if (minutes >= 60) return "libseat-meeting-room-free-60";
+    return "libseat-meeting-room-free-30";
+  }
+
+  function meetingRoomFloorText(room) {
+    const text = cleanReservationText(room && room.parentNamePath);
+    const matches = text.match(/(\d+\s*楼|[一二三四五六七八九十]+楼)/g);
+    return matches && matches.length ? matches[matches.length - 1].replace(/\s+/g, "") : text;
+  }
+
+  function meetingFilterValues(controls) {
+    return {
+      status: controls.statusFilter.value,
+      floor: cleanReservationText(controls.floorFilter.value),
+      minAttendees: numericInputValue(controls.minAttendeesInput),
+      maxAttendees: numericInputValue(controls.maxAttendeesInput),
+    };
+  }
+
+  function meetingRoomMatchesFilters(room, range, filters) {
+    if (!room) return false;
+    const availabilityClass = meetingRoomAvailabilityClass(room, range);
+    if (filters.status === "FREE" && (normalizedRoomStatus(room) !== "FREE" || room.canReserve === false)) return false;
+    if (filters.status && filters.status !== "FREE" && filters.status !== availabilityClass) return false;
+
+    if (filters.floor) {
+      const text = cleanReservationText([meetingRoomFloorText(room), room.parentNamePath].filter(Boolean).join(" "));
+      if (!text.includes(filters.floor)) return false;
+    }
+
+    const capacity = roomCapacity(room);
+    const minAttendees = roomMinAttendees(room);
+    if (filters.minAttendees !== null) {
+      if (capacity > 0 && capacity < filters.minAttendees) return false;
+      if (minAttendees > 0 && minAttendees > filters.minAttendees) return false;
+    }
+    if (filters.maxAttendees !== null && capacity > 0 && capacity > filters.maxAttendees) return false;
+    return true;
+  }
+
+  function meetingRoomStatusLabel(room, range) {
+    const minutes = roomAvailableMinutes(room, range);
+    if (minutes >= DEFAULT_MIN_RESERVATION_MINUTES) return cleanReservationText(room.statusLabel) || "空闲";
+    return cleanReservationText(room.statusLabel || room.cannotReserveReason) || "不可预约";
+  }
+
+  function meetingRoomMeta(room) {
+    const parts = [];
+    const location = cleanReservationText(room && room.parentNamePath);
+    const time = cleanReservationText(room && room.time);
+    const capacity = roomCapacity(room);
+    const minAttendees = roomMinAttendees(room);
+    if (location) parts.push(location);
+    if (time) parts.push(time);
+    if (capacity) parts.push(`最多${capacity}人`);
+    if (minAttendees) parts.push(`最少${minAttendees}人`);
+    return parts.join(" / ");
+  }
+
+  function renderMeetingRooms(controls) {
+    if (!controls || !controls.grid) return;
+    const range = controls.lastRange || meetingRangeFromControls(controls);
+    const rooms = Array.isArray(controls.allRooms) ? controls.allRooms : [];
+    const filters = meetingFilterValues(controls);
+    const filtered = range.error ? [] : rooms.filter((room) => meetingRoomMatchesFilters(room, range, filters));
+    controls.filteredRooms = filtered;
+    document.documentElement.classList.add("libseat-meeting-custom-active");
+
+    if (!filtered.length) {
+      controls.grid.innerHTML = `<div class="libseat-meeting-room-empty">${escapeHtml(rooms.length ? "没有符合条件的研修间" : "正在读取研修间")}</div>`;
+      controls.queryButton.title = rooms.length ? "没有符合条件的研修间" : "正在读取研修间";
+      return;
+    }
+
+    controls.grid.innerHTML = filtered
+      .map((room, index) => {
+        const availabilityClass = meetingRoomAvailabilityClass(room, range);
+        const unavailable = availabilityClass === "libseat-meeting-room-unavailable";
+        return `
+          <button class="libseat-meeting-room-card ${availabilityClass}${unavailable ? " unavailable" : ""}" type="button" data-index="${index}">
+            <span>
+              <span class="libseat-meeting-room-name">${escapeHtml(room.name || "研修间")}</span>
+              <span class="libseat-meeting-room-meta">${escapeHtml(meetingRoomMeta(room))}</span>
+            </span>
+            <span class="libseat-meeting-room-status">${escapeHtml(meetingRoomStatusLabel(room, range))}</span>
+          </button>
+        `;
+      })
+      .join("");
+
+    controls.grid.querySelectorAll(".libseat-meeting-room-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const index = Number(card.dataset.index);
+        const room = filtered[index];
+        if (!room || meetingRoomAvailabilityClass(room, range) === "libseat-meeting-room-unavailable") {
+          card.title = cleanReservationText(room && (room.cannotReserveReason || room.statusLabel)) || "当前不可预约";
+          return;
+        }
+        openMeetingRoomFromPage(filtered, index, range);
+      });
+    });
+
+    controls.queryButton.title = `显示 ${filtered.length}/${rooms.length} 个研修间`;
+  }
+
+  async function refreshMeetingRooms(controls) {
+    if (!controls || controls.busy) return false;
+    const range = meetingRangeFromControls(controls);
+    if (range.error) {
+      controls.queryButton.title = range.error;
+      return false;
+    }
+
+    controls.busy = true;
+    controls.queryButton.disabled = true;
+    controls.queryButton.textContent = "查询中";
+
+    try {
+      const collected = await collectMeetingRoomsFromPage(range);
+      let rooms = collected && Array.isArray(collected.rooms) ? collected.rooms : [];
+      if (!rooms.length) rooms = await fetchMeetingRoomsDirect(range);
+      controls.allRooms = rooms;
+      controls.lastRange = range;
+      renderMeetingRooms(controls);
+      return rooms.length > 0;
+    } finally {
+      controls.busy = false;
+      controls.queryButton.disabled = false;
+      controls.queryButton.textContent = "按条件查询";
+    }
+  }
+
+  function hideMeetingLoadMoreNodes() {
+    if (!isMeetingReservePage()) return;
+    document.querySelectorAll("uni-view, div, span").forEach((node) => {
+      if (node.children.length > 3) return;
+      const text = cleanReservationText(node.textContent);
+      if (!/^点击加载更多$|^加载更多$|^没有更多了$/.test(text)) return;
+      const container =
+        node.closest(".z-paging-load-more, .zp-load-more, [class*='load-more'], [class*='loading-more']") ||
+        node;
+      container.style.setProperty("display", "none", "important");
+    });
   }
 
   function refreshSeatMapFromQuery(block, controls) {
@@ -3522,6 +4399,118 @@
     }
   }
 
+  function enhanceMeetingTimePicker(block) {
+    hideOriginalPicker(block);
+    if (block.dataset.libseatMeetingTimeEnhanced === "1") return;
+
+    const value = completeTimeRangeValue(currentRangePickerValue(block), todayText());
+    const wrapper = document.createElement("div");
+    const index = ++replacementIndex;
+    const dateId = `libseat-meeting-date-${index}`;
+    const startId = `libseat-meeting-start-${index}`;
+    const endId = `libseat-meeting-end-${index}`;
+    wrapper.className = "libseat-time-replacement libseat-meeting-query-wrapper";
+    wrapper.innerHTML = `
+      <div class="libseat-time-replacement-head">
+        <div class="libseat-time-replacement-title">研修间查询</div>
+      </div>
+      <div class="libseat-meeting-query">
+        <div class="libseat-time-field">
+          <label for="${dateId}">日期</label>
+          <input id="${dateId}" class="libseat-meeting-date-input" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-label="研修间查询日期">
+        </div>
+        <div class="libseat-time-field">
+          <label for="${startId}">开始</label>
+          <input id="${startId}" class="libseat-meeting-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="研修间查询开始时间">
+        </div>
+        <div class="libseat-time-field">
+          <label for="${endId}">结束</label>
+          <input id="${endId}" class="libseat-meeting-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="研修间查询结束时间">
+        </div>
+        <div class="libseat-time-field">
+          <label>状态</label>
+          <select class="libseat-meeting-status-filter" aria-label="状态筛选">
+            <option value="">全部</option>
+            <option value="FREE">空闲</option>
+            <option value="libseat-meeting-room-free-30">30分钟-1小时</option>
+            <option value="libseat-meeting-room-free-60">1-2小时</option>
+            <option value="libseat-meeting-room-free-120">2小时以上</option>
+            <option value="libseat-meeting-room-unavailable">占用/不可预约</option>
+          </select>
+        </div>
+        <div class="libseat-time-field">
+          <label>楼层</label>
+          <input class="libseat-meeting-floor-filter" type="text" inputmode="text" autocomplete="off" placeholder="5楼" aria-label="楼层筛选">
+        </div>
+        <div class="libseat-time-field">
+          <label>最少人数</label>
+          <input class="libseat-meeting-min-attendees-input" type="text" inputmode="numeric" autocomplete="off" placeholder="人数" aria-label="最少人数筛选">
+        </div>
+        <div class="libseat-time-field">
+          <label>最多人数</label>
+          <input class="libseat-meeting-max-attendees-input" type="text" inputmode="numeric" autocomplete="off" placeholder="人数" aria-label="最多人数筛选">
+        </div>
+        <button class="libseat-reserve-button libseat-meeting-query-button" type="button">按条件查询</button>
+      </div>
+    `;
+
+    const grid = document.createElement("div");
+    grid.className = "libseat-meeting-room-grid";
+    grid.innerHTML = `<div class="libseat-meeting-room-empty">正在读取研修间</div>`;
+
+    const controls = {
+      block,
+      wrapper,
+      grid,
+      date: value.date || todayText(),
+      dateInput: wrapper.querySelector(".libseat-meeting-date-input"),
+      queryStart: wrapper.querySelector(".libseat-meeting-start-input"),
+      queryEnd: wrapper.querySelector(".libseat-meeting-end-input"),
+      statusFilter: wrapper.querySelector(".libseat-meeting-status-filter"),
+      floorFilter: wrapper.querySelector(".libseat-meeting-floor-filter"),
+      minAttendeesInput: wrapper.querySelector(".libseat-meeting-min-attendees-input"),
+      maxAttendeesInput: wrapper.querySelector(".libseat-meeting-max-attendees-input"),
+      queryButton: wrapper.querySelector(".libseat-meeting-query-button"),
+      allRooms: [],
+      filteredRooms: [],
+      lastRange: null,
+      busy: false,
+    };
+
+    controls.dateInput.value = controls.date;
+    controls.queryStart.value = value.startTime || DAY_OPEN_TIME;
+    controls.queryEnd.value = value.endTime || DAY_CLOSE_TIME;
+    bindPlainDateInput(controls.dateInput);
+    bindReserveTimeInput(controls.queryStart);
+    bindReserveTimeInput(controls.queryEnd);
+
+    controls.queryButton.addEventListener("click", () => refreshMeetingRooms(controls));
+    controls.dateInput.addEventListener("input", () => {
+      controls.date = controls.dateInput.value.trim();
+    });
+    [controls.statusFilter, controls.floorFilter, controls.minAttendeesInput, controls.maxAttendeesInput].forEach((input) => {
+      input.addEventListener("input", () => renderMeetingRooms(controls));
+      input.addEventListener("change", () => renderMeetingRooms(controls));
+    });
+    [controls.dateInput, controls.queryStart, controls.queryEnd].forEach((input) => {
+      input.addEventListener("blur", () => refreshMeetingRooms(controls));
+    });
+
+    block.parentNode.insertBefore(wrapper, block);
+    const meetingRoom = document.querySelector(".meeting-room");
+    if (meetingRoom && meetingRoom.parentNode) {
+      meetingRoom.parentNode.insertBefore(grid, meetingRoom);
+    } else {
+      wrapper.parentNode.insertBefore(grid, wrapper.nextSibling);
+    }
+
+    block.dataset.libseatTopReplacement = "1";
+    block.dataset.libseatMeetingTimeEnhanced = "1";
+    meetingRoomState = controls;
+    document.documentElement.classList.add("libseat-meeting-custom-active");
+    refreshMeetingRooms(controls);
+  }
+
   function enhanceTimePicker(block) {
     hideOriginalPicker(block);
     if (block.dataset.libseatTimeEnhanced) return;
@@ -3873,10 +4862,25 @@
     const snapshot = pageModalSnapshot(block);
     if (!modalVm && !snapshot) return;
 
-    const date =
+    let date =
       (modalVm && modalVm.timeRange && modalVm.timeRange.date) ||
       (snapshot && snapshot.timeRange && snapshot.timeRange.date) ||
       controls.date;
+    if (modalVm && modalVm.timeRange) {
+      const fixedRange = completeTimeRangeValue(Object.assign({}, modalVm.timeRange, { date }), date);
+      if (
+        fixedRange.date !== modalVm.timeRange.date ||
+        fixedRange.startTime !== modalVm.timeRange.startTime ||
+        fixedRange.endTime !== modalVm.timeRange.endTime
+      ) {
+        if (typeof modalVm.$set === "function") {
+          modalVm.$set(modalVm, "timeRange", fixedRange);
+        } else {
+          modalVm.timeRange = fixedRange;
+        }
+      }
+      date = fixedRange.date;
+    }
     controls.date = date;
     updateDateButtons(controls, date);
 
@@ -3953,6 +4957,7 @@
     const tomorrow = tomorrowText();
     const defaultDate = defaultDateText();
     const dateValue = defaultDate;
+    const completedValue = completeTimeRangeValue(Object.assign({}, value, { date: dateValue }), dateValue);
 
     const wrapper = document.createElement("div");
     const index = ++replacementIndex;
@@ -4001,11 +5006,19 @@
       applyingSlot: false,
     };
 
-    controls.start.value = value.startTime && isTimeText(value.startTime) ? value.startTime : "";
-    controls.end.value = value.endTime && isTimeText(value.endTime) ? value.endTime : "";
+    controls.start.value = completedValue.startTime;
+    controls.end.value = completedValue.endTime;
     updateDateButtons(controls, dateValue);
-    if (dateValue !== value.date) {
-      emitRangePickerChange(block, "date", dateValue);
+    if (
+      dateValue !== value.date ||
+      completedValue.startTime !== value.startTime ||
+      completedValue.endTime !== value.endTime
+    ) {
+      emitRangePickerRange(
+        block,
+        { date: dateValue, startTime: completedValue.startTime, endTime: completedValue.endTime },
+        dateValue !== value.date
+      );
     }
     bindDateButton(block, controls, controls.todayButton);
     bindDateButton(block, controls, controls.tomorrowButton);
@@ -4029,28 +5042,139 @@
     setInterval(() => updateSlotSelect(block, controls), 1200);
   }
 
+  function refreshMeetingModalReservations(block) {
+    const modalVm = findMeetingModalVm(block);
+    if (!modalVm) return false;
+    const names = ["getMeetingReservations", "getReservations", "queryReservations", "initReservations"];
+    for (const name of names) {
+      if (typeof modalVm[name] !== "function") continue;
+      setTimeout(() => {
+        try {
+          modalVm[name]();
+        } catch (error) {}
+      }, 0);
+      return true;
+    }
+    return false;
+  }
+
+  function setMeetingModalRange(block, controls, updates) {
+    const current = {
+      date: controls.dateInput.value,
+      startTime: controls.start.value,
+      endTime: controls.end.value,
+    };
+    const next = completeTimeRangeValue(Object.assign({}, current, updates), updates && updates.date);
+    controls.dateInput.value = next.date;
+    controls.start.value = next.startTime;
+    controls.end.value = next.endTime;
+
+    const modalVm = findMeetingModalVm(block);
+    if (modalVm && modalVm.timeRange) {
+      if (typeof modalVm.$set === "function") {
+        modalVm.$set(modalVm, "timeRange", Object.assign({}, modalVm.timeRange, next));
+      } else {
+        modalVm.timeRange = Object.assign({}, modalVm.timeRange, next);
+      }
+      if (typeof modalVm.$forceUpdate === "function") modalVm.$forceUpdate();
+    }
+
+    emitRangePickerRange(block, next, !!(updates && updates.date));
+    refreshMeetingModalReservations(block);
+  }
+
+  function enhanceMeetingModalTimePicker(block) {
+    hideOriginalPicker(block);
+    if (block.dataset.libseatMeetingSlotEnhanced === "1") return;
+
+    const value = completeTimeRangeValue(currentRangePickerValue(block), todayText());
+    const wrapper = document.createElement("div");
+    const index = ++replacementIndex;
+    const dateId = `libseat-meeting-modal-date-${index}`;
+    const startId = `libseat-meeting-modal-start-${index}`;
+    const endId = `libseat-meeting-modal-end-${index}`;
+    wrapper.className = "libseat-slot-replacement libseat-meeting-slot-replacement";
+    wrapper.innerHTML = `
+      <div class="libseat-time-replacement-head">
+        <div class="libseat-time-replacement-title">预约时间</div>
+      </div>
+      <div class="libseat-meeting-slot-grid">
+        <div class="libseat-time-field">
+          <label for="${dateId}">日期</label>
+          <input id="${dateId}" class="libseat-meeting-modal-date-input" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" aria-label="研修间预约日期">
+        </div>
+        <div class="libseat-time-field">
+          <label for="${startId}">开始</label>
+          <input id="${startId}" class="libseat-meeting-modal-start-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="研修间预约开始时间">
+        </div>
+        <div class="libseat-time-field">
+          <label for="${endId}">结束</label>
+          <input id="${endId}" class="libseat-meeting-modal-end-input" type="text" inputmode="numeric" autocomplete="off" placeholder="HH:mm" aria-label="研修间预约结束时间">
+        </div>
+      </div>
+    `;
+
+    const controls = {
+      dateInput: wrapper.querySelector(".libseat-meeting-modal-date-input"),
+      start: wrapper.querySelector(".libseat-meeting-modal-start-input"),
+      end: wrapper.querySelector(".libseat-meeting-modal-end-input"),
+    };
+
+    controls.dateInput.value = value.date;
+    controls.start.value = value.startTime;
+    controls.end.value = value.endTime;
+    bindPlainDateInput(controls.dateInput);
+    bindReserveTimeInput(controls.start);
+    bindReserveTimeInput(controls.end);
+    controls.dateInput.addEventListener("blur", () => setMeetingModalRange(block, controls, { date: controls.dateInput.value }));
+    controls.start.addEventListener("blur", () => setMeetingModalRange(block, controls, { startTime: controls.start.value }));
+    controls.end.addEventListener("blur", () => setMeetingModalRange(block, controls, { endTime: controls.end.value }));
+
+    block.parentNode.insertBefore(wrapper, block);
+    block.dataset.libseatMeetingSlotEnhanced = "1";
+    setMeetingModalRange(block, controls, value);
+  }
+
   function enhanceTimePickers() {
+    const meetingPage = isMeetingReservePage();
+    const seatPage = isSeatReservePage();
+
     document
       .querySelectorAll(".seat-reserve-modal .seat-time-picker .time-block")
       .forEach(enhanceModalTimePicker);
 
+    if (meetingPage) {
+      document.querySelectorAll(".reserve-modal .time-section").forEach(enhanceMeetingModalTimePicker);
+    }
+
     const blocks = new Set(
       Array.from(document.querySelectorAll(".range-picker.time-block")).filter(
-        (block) => !block.closest(".seat-reserve-modal")
+        (block) => !block.closest(".seat-reserve-modal") && !block.closest(".reserve-modal")
       )
     );
     const exactBlock = document.querySelector(RANGE_PICKER_SELECTOR);
     if (exactBlock && exactBlock.classList.contains("range-picker")) blocks.add(exactBlock);
-    blocks.forEach(enhanceTimePicker);
+    blocks.forEach((block) => {
+      if (meetingPage) {
+        enhanceMeetingTimePicker(block);
+      } else if (seatPage) {
+        enhanceTimePicker(block);
+      }
+    });
   }
 
   function enhancePage() {
     injectStyle();
     applyPcWideClass();
+    installRequestTimeGuard();
     installPageBridge();
     applySeatMapScale();
     stabilizeFacilityImages();
     classifySeatMap();
+    if (isMeetingReservePage()) {
+      hideMeetingLoadMoreNodes();
+      if (meetingRoomState) renderMeetingRooms(meetingRoomState);
+    }
     queueClassifySeatMap();
     replaceSeatLegend();
     enhanceTimePickers();
@@ -4084,6 +5208,7 @@
 
   injectStyle();
   applyPcWideClass();
+  installRequestTimeGuard();
   installDebugApi();
   installPageBridge();
   debugStartup();
@@ -4106,5 +5231,6 @@
   window.addEventListener("resize", queueSeatMapLayout);
   window.setInterval(applySeatMapScale, 1500);
   window.setInterval(classifySeatMap, 1500);
+  window.setInterval(hideMeetingLoadMoreNodes, 1500);
   window.setInterval(stabilizeFacilityImages, 2000);
 })();
