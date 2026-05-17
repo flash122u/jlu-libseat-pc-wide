@@ -210,8 +210,8 @@
       }
 
       .libseat-home-page .function-list .function-item-image {
-        width: min(100%, 440px) !important;
-        height: 300px !important;
+        width: min(100%, 300px) !important;
+        height: 180px !important;
         border-radius: 8px !important;
         object-fit: cover !important;
         box-shadow: none !important;
