@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.14
+// @version      1.17.15
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.14";
+  const SCRIPT_VERSION = "1.17.15";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -323,8 +323,9 @@
       .libseat-meeting-toggle-options {
         display: grid;
         gap: 4px;
-        height: 36px;
+        height: 34px;
         width: 100%;
+        box-sizing: border-box;
       }
 
       .libseat-meeting-toggle-options.two {
@@ -338,7 +339,7 @@
       .libseat-meeting-toggle-option {
         width: 100%;
         min-width: 0;
-        height: 36px;
+        height: 34px;
         padding: 0 8px;
         border: 1px solid #d6dde8;
         border-radius: 6px;
@@ -348,6 +349,7 @@
         font-size: 13px;
         line-height: 1.1;
         white-space: nowrap;
+        box-sizing: border-box;
         cursor: pointer;
       }
 
@@ -467,11 +469,21 @@
       }
 
       .reserve-modal .e-modal {
-        width: min(960px, 92vw) !important;
-        max-width: 92vw !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: auto !important;
+        max-width: none !important;
       }
 
-      .reserve-modal .e-modal uni-scroll-view,
+      .reserve-modal .e-modal-container {
+        width: min(960px, 92vw) !important;
+        max-width: 92vw !important;
+        max-height: 88vh !important;
+        margin: auto !important;
+        box-sizing: border-box !important;
+      }
+
       .reserve-modal .e-modal uni-scroll-view > div,
       .reserve-modal .e-modal uni-scroll-view > div > div,
       .reserve-modal .e-modal uni-scroll-view > div > div > div {
@@ -5234,6 +5246,30 @@
     return false;
   }
 
+  function closeMeetingModalFromNode(node) {
+    const modalVm = findMeetingModalVm(node);
+    if (!modalVm) return false;
+    if (typeof modalVm.$set === "function") {
+      modalVm.$set(modalVm, "visible", false);
+    } else {
+      modalVm.visible = false;
+    }
+    if (typeof modalVm.$emit === "function") modalVm.$emit("update:visible", false);
+    if (typeof modalVm.$forceUpdate === "function") modalVm.$forceUpdate();
+    return true;
+  }
+
+  function bindMeetingModalOutsideClose() {
+    document.querySelectorAll(".reserve-modal .e-modal, .reserve-modal .e-modal-mask").forEach((layer) => {
+      if (layer.dataset.libseatMeetingOutsideClose === "1") return;
+      layer.dataset.libseatMeetingOutsideClose = "1";
+      layer.addEventListener("click", (event) => {
+        if (event.target && typeof event.target.closest === "function" && event.target.closest(".e-modal-container")) return;
+        closeMeetingModalFromNode(layer);
+      });
+    });
+  }
+
   function setMeetingModalRange(block, controls, updates) {
     const current = {
       date: controls.dateInput.value,
@@ -5260,9 +5296,9 @@
   }
 
   function enhanceMeetingModalTimePicker(block) {
-    hideOriginalPicker(block);
     if (block.dataset.libseatMeetingSlotEnhanced === "1") return;
 
+    const originalPicker = block.querySelector(".time-picker") || block;
     const value = completeTimeRangeValue(currentRangePickerValue(block), todayText());
     const wrapper = document.createElement("div");
     const index = ++replacementIndex;
@@ -5306,7 +5342,12 @@
     controls.start.addEventListener("blur", () => setMeetingModalRange(block, controls, { startTime: controls.start.value }));
     controls.end.addEventListener("blur", () => setMeetingModalRange(block, controls, { endTime: controls.end.value }));
 
-    block.parentNode.insertBefore(wrapper, block);
+    hideOriginalPicker(originalPicker);
+    if (originalPicker.parentNode === block) {
+      block.insertBefore(wrapper, originalPicker);
+    } else {
+      block.appendChild(wrapper);
+    }
     block.dataset.libseatMeetingSlotEnhanced = "1";
     setMeetingModalRange(block, controls, value);
   }
@@ -5321,6 +5362,7 @@
 
     if (meetingPage) {
       document.querySelectorAll(".reserve-modal .time-section").forEach(enhanceMeetingModalTimePicker);
+      bindMeetingModalOutsideClose();
     }
 
     const blocks = new Set(
