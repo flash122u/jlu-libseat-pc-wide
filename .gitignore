@@ -4,3 +4,4 @@ Thumbs.db
 node_modules/
 dist/
 *.user.js.map
+example
