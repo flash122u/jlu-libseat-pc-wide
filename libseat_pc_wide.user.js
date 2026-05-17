@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.23
+// @version      1.17.24
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.23";
+  const SCRIPT_VERSION = "1.17.24";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -420,32 +420,12 @@
         white-space: nowrap;
       }
 
-      .libseat-meeting-room-free-30 {
-        border-color: #f59e0b !important;
-        background: #fffbeb !important;
-      }
-
-      .libseat-meeting-room-free-30 .libseat-meeting-room-status {
-        color: #b45309;
-        background: #fef3c7;
-      }
-
-      .libseat-meeting-room-free-60 {
-        border-color: #eab308 !important;
-        background: #fefce8 !important;
-      }
-
-      .libseat-meeting-room-free-60 .libseat-meeting-room-status {
-        color: #854d0e;
-        background: #fef9c3;
-      }
-
-      .libseat-meeting-room-free-120 {
+      .libseat-meeting-room-available {
         border-color: #22c55e !important;
         background: #f0fdf4 !important;
       }
 
-      .libseat-meeting-room-free-120 .libseat-meeting-room-status {
+      .libseat-meeting-room-available .libseat-meeting-room-status {
         color: #047857;
         background: #dcfce7;
       }
@@ -4353,9 +4333,7 @@
   function meetingRoomAvailabilityClass(room, range) {
     const minutes = roomAvailableMinutes(room, range);
     if (minutes < DEFAULT_MIN_RESERVATION_MINUTES) return "libseat-meeting-room-unavailable";
-    if (minutes >= 120) return "libseat-meeting-room-free-120";
-    if (minutes >= 60) return "libseat-meeting-room-free-60";
-    return "libseat-meeting-room-free-30";
+    return "libseat-meeting-room-available";
   }
 
   function meetingRoomFloorText(room) {
