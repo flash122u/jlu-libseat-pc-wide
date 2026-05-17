@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.17
+// @version      1.17.18
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.17";
+  const SCRIPT_VERSION = "1.17.18";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -594,6 +594,8 @@
 
       .reserve-modal .meeting-form .meeting-input,
       .reserve-modal .meeting-form .meeting-textarea {
+        display: block !important;
+        position: relative !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
@@ -607,14 +609,41 @@
       .reserve-modal .meeting-form .meeting-textarea .uni-textarea-wrapper,
       .reserve-modal .meeting-form .meeting-textarea .uni-textarea-textarea {
         display: block !important;
+        position: relative !important;
         width: 100% !important;
         min-height: 180px !important;
         height: 180px !important;
         box-sizing: border-box !important;
       }
 
+      .reserve-modal .meeting-form .meeting-textarea .uni-textarea-wrapper {
+        overflow: visible !important;
+      }
+
+      .reserve-modal .meeting-form .meeting-textarea .uni-textarea-textarea {
+        z-index: 2 !important;
+        padding: 12px !important;
+        border: 0 !important;
+        background: transparent !important;
+        color: #111827 !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        opacity: 1 !important;
+        resize: vertical !important;
+      }
+
       .reserve-modal .meeting-form .meeting-textarea .uni-textarea-placeholder {
+        z-index: 1 !important;
+        pointer-events: none !important;
+        padding: 12px !important;
+        color: #9ca3af !important;
         line-height: 1.4 !important;
+      }
+
+      .reserve-modal .meeting-form .meeting-textarea .uni-textarea-line,
+      .reserve-modal .meeting-form .meeting-textarea .uni-textarea-compute,
+      .reserve-modal .meeting-form .meeting-textarea uni-resize-sensor {
+        display: none !important;
       }
 
       .reserve-modal .modal-body > .libseat-meeting-slot-replacement,
@@ -3160,7 +3189,7 @@
 
   function enhanceReservationUserLabels() {
     document
-      .querySelectorAll(".seat-reserve-modal .e-modal_show .seat-reservations-list, .reserve-modal .e-modal_show .seat-reservations-list")
+      .querySelectorAll(".seat-reserve-modal .e-modal_show .seat-reservations-list, .reserve-modal .e-modal_show .reservations-list")
       .forEach((list) => {
         const modalVm = findReservationModalVm(list) || findMeetingModalVm(list);
         if (!modalVm || !Array.isArray(modalVm.reservations)) return;
