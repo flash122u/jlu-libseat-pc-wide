@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.5
+// @version      1.18.6
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.5";
+  const SCRIPT_VERSION = "1.18.6";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -3467,6 +3467,21 @@
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   }
 
+  function normalizeDateInputValue(value) {
+    const raw = String(value || "").trim();
+    if (isDateText(raw)) return raw;
+
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length !== 8) return "";
+
+    const year = Number(digits.slice(0, 4));
+    const month = Number(digits.slice(4, 6));
+    const day = Number(digits.slice(6, 8));
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return "";
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+  }
+
   function normalizeTimeInputValue(value) {
     const raw = String(value || "").trim();
     if (isTimeText(raw)) return raw;
@@ -4435,7 +4450,9 @@
     nativeInput.addEventListener("blur", () => {
       const wrapper = nativeInput.closest(".libseat-time-replacement, .libseat-slot-replacement");
       if (wrapper) wrapper.dataset.libseatFocused = "";
-      if (!isDateText(nativeInput.value)) nativeInput.value = todayText();
+      const value = normalizeDateInputValue(nativeInput.value);
+      if (value) nativeInput.value = value;
+      else if (!String(nativeInput.value || "").trim()) nativeInput.value = todayText();
     });
     nativeInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
@@ -4647,7 +4664,8 @@
   }
 
   function meetingRangeFromControls(controls) {
-    const date = String((controls.dateInput && controls.dateInput.value) || controls.date || todayText()).trim();
+    const rawDate = String((controls.dateInput && controls.dateInput.value) || controls.date || todayText()).trim();
+    const date = normalizeDateInputValue(rawDate);
     const startTime = normalizeTimeInputValue(controls.queryStart.value || "");
     const endTime = normalizeTimeInputValue(controls.queryEnd.value || "");
 
@@ -4693,6 +4711,11 @@
     return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
+  function roomMinDurationMinutes(room) {
+    const value = Number(roomRule(room).minDurationMinutes);
+    return Number.isFinite(value) && value > 0 ? value : DEFAULT_MIN_RESERVATION_MINUTES;
+  }
+
   function roomAllowsAttendees(room, attendees) {
     if (attendees === null) return true;
     const capacity = roomCapacity(room);
@@ -4703,21 +4726,37 @@
   }
 
   function roomAvailableMinutes(room, range) {
-    if (!room || room.canReserve === false || normalizedRoomStatus(room) !== "FREE") return 0;
+    if (!room || room.canReserve === false) return 0;
     const queryStart = timeToMinutes(range && range.startTime);
     const queryEnd = timeToMinutes(range && range.endTime);
     if (queryStart === null || queryEnd === null || queryEnd <= queryStart) return 0;
 
+    if (room.canReserve === true) return Math.max(roomMinDurationMinutes(room), queryEnd - queryStart);
+
+    const status = normalizedRoomStatus(room);
+    if (room.canReserve !== true && /CLOSE|CLOSED|DISABLE|DISABLED|UNAVAILABLE/.test(status)) return 0;
+
+    const rule = roomRule(room);
     const roomOpen = timeToMinutes(room.openTime);
     const roomClose = timeToMinutes(room.closeTime);
-    const start = roomOpen === null ? queryStart : Math.max(queryStart, roomOpen);
-    const end = roomClose === null ? queryEnd : Math.min(queryEnd, roomClose);
+    const availableStart = timeToMinutes(rule.availableStartTime);
+    const availableEnd = timeToMinutes(rule.availableEndTime);
+    const start = Math.max(
+      queryStart,
+      roomOpen === null ? queryStart : roomOpen,
+      availableStart === null ? queryStart : availableStart
+    );
+    const end = Math.min(
+      queryEnd,
+      roomClose === null ? queryEnd : roomClose,
+      availableEnd === null ? queryEnd : availableEnd
+    );
     return Math.max(0, end - start);
   }
 
   function meetingRoomAvailabilityClass(room, range) {
     const minutes = roomAvailableMinutes(room, range);
-    if (minutes < DEFAULT_MIN_RESERVATION_MINUTES) return "libseat-meeting-room-unavailable";
+    if (minutes < roomMinDurationMinutes(room)) return "libseat-meeting-room-unavailable";
     return "libseat-meeting-room-available";
   }
 
@@ -4748,7 +4787,7 @@
     if (!room) return false;
     const availabilityClass = meetingRoomAvailabilityClass(room, range);
     if (filters.statuses.length) {
-      const freeMatched = filters.statuses.includes("FREE") && normalizedRoomStatus(room) === "FREE" && room.canReserve !== false;
+      const freeMatched = filters.statuses.includes("FREE") && availabilityClass === "libseat-meeting-room-available";
       const busyMatched = filters.statuses.includes("BUSY") && availabilityClass === "libseat-meeting-room-unavailable";
       if (!freeMatched && !busyMatched) return false;
     }
@@ -4763,7 +4802,7 @@
 
   function meetingRoomStatusLabel(room, range) {
     const minutes = roomAvailableMinutes(room, range);
-    if (minutes >= DEFAULT_MIN_RESERVATION_MINUTES) return cleanReservationText(room.statusLabel) || "空闲";
+    if (minutes >= roomMinDurationMinutes(room)) return "空闲";
     return cleanReservationText(room.statusLabel || room.cannotReserveReason) || "不可预约";
   }
 
