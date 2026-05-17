@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.0
+// @version      1.18.1
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.0";
+  const SCRIPT_VERSION = "1.18.1";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -31,7 +31,10 @@
   const USER_DETAIL_PREFIX = "/v1/users";
   const SEAT_RESERVE_ROUTE_PREFIX = "/pages/reserve/seat-reserve/";
   const SEAT_ROOM_ROUTE = "/pages/reserve/seat-reserve/seat-reserve-v2";
+  const RESERVE_HOME_ROUTE = "/pages/reserve/reserve";
+  const USER_HOME_ROUTE = "/pages/user/user";
   const MEETING_RESERVE_ROUTE = "/pages/reserve/meeting-reserve/meeting-reserve-v2";
+  const HOME_TOP_LOGO_URL = "https://lib.jlu.edu.cn/engine2/file/download/bf62f62b55d86111f0083c35b3969617bdc7";
   const DEFAULT_RESERVATION_RETRIES = 3;
   const DEFAULT_RESERVATION_RETRY_INTERVAL_MS = 500;
   const AUTO_RESERVATION_SUBMIT_MINUTES = 21 * 60;
@@ -103,12 +106,18 @@
         box-sizing: border-box !important;
       }
 
+      .libseat-home-page,
+      .libseat-reserve-entry-page,
+      .libseat-user-page {
+        --h5-shell-width: min(max(90vw, 900px), 1120px) !important;
+      }
+
       .libseat-home-page uni-page-body {
         background: #f5f7fa !important;
       }
 
       .libseat-home-page .container {
-        max-width: 1180px !important;
+        max-width: 1040px !important;
         min-height: calc(100vh - 64px) !important;
         padding: 24px 32px 40px !important;
         background: #f5f7fa !important;
@@ -116,18 +125,33 @@
 
       .libseat-home-page .top-img {
         display: block !important;
-        width: min(100%, 1120px) !important;
-        height: 220px !important;
+        width: min(100%, 980px) !important;
+        height: 150px !important;
         margin: 0 auto !important;
         border-radius: 8px !important;
-        object-fit: cover !important;
+        background: #0f3f6f !important;
+        background-image: url("${HOME_TOP_LOGO_URL}") !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-size: min(68%, 480px) auto !important;
+        object-fit: contain !important;
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08) !important;
+      }
+
+      .libseat-home-page .top-img img {
+        object-fit: contain !important;
+      }
+
+      .libseat-home-page .top-img > div {
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-size: min(68%, 480px) auto !important;
       }
 
       .libseat-home-page .message {
         position: relative !important;
         top: auto !important;
-        width: min(100%, 1120px) !important;
+        width: min(100%, 980px) !important;
         height: 44px !important;
         margin: 12px auto 0 !important;
         padding: 0 14px !important;
@@ -159,14 +183,18 @@
         display: grid !important;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
         gap: 16px !important;
-        width: min(100%, 1120px) !important;
+        width: min(100%, 980px) !important;
         margin: 18px auto 0 !important;
         z-index: auto !important;
       }
 
       .libseat-home-page .function-list .function-item {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
         width: auto !important;
-        min-height: 164px !important;
+        min-height: 210px !important;
         padding: 18px !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
@@ -182,8 +210,8 @@
       }
 
       .libseat-home-page .function-list .function-item-image {
-        width: 100% !important;
-        height: 112px !important;
+        width: min(100%, 260px) !important;
+        height: 142px !important;
         border-radius: 8px !important;
         object-fit: cover !important;
         box-shadow: none !important;
@@ -192,10 +220,24 @@
       .libseat-home-page .function-list .function-item-text {
         margin-top: 12px !important;
         color: #111827 !important;
-        font-size: 15px !important;
+        font-size: 16px !important;
         font-weight: 700 !important;
         line-height: 22px !important;
-        text-align: left !important;
+        text-align: center !important;
+      }
+
+      .libseat-reserve-entry-page uni-page-body,
+      .libseat-user-page uni-page-body {
+        background: #f5f7fa !important;
+      }
+
+      .libseat-reserve-entry-page .container,
+      .libseat-user-page .container {
+        max-width: 1040px !important;
+        min-height: calc(100vh - 64px) !important;
+        padding-left: 28px !important;
+        padding-right: 28px !important;
+        background: #f5f7fa !important;
       }
 
       .libseat-seat-room-page uni-page-body {
@@ -273,20 +315,20 @@
       .libseat-seat-room-page .reading-room-item__name {
         margin-bottom: 8px !important;
         color: #111827 !important;
-        font-size: 15px !important;
-        line-height: 22px !important;
+        font-size: 17px !important;
+        line-height: 24px !important;
       }
 
       .libseat-seat-room-page .reading-room-item__description {
         margin-bottom: 4px !important;
         color: #475569 !important;
-        font-size: 12px !important;
-        line-height: 18px !important;
+        font-size: 14px !important;
+        line-height: 20px !important;
       }
 
       .libseat-seat-room-page .reading-room-item__status {
-        font-size: 12px !important;
-        line-height: 24px !important;
+        font-size: 14px !important;
+        line-height: 28px !important;
       }
 
       .libseat-seat-room-page .btn {
@@ -1666,6 +1708,8 @@
   function applyPcWideClass() {
     document.documentElement.classList.add("libseat-pc-wide");
     document.documentElement.classList.toggle("libseat-home-page", isHomePage());
+    document.documentElement.classList.toggle("libseat-reserve-entry-page", isReserveEntryPage());
+    document.documentElement.classList.toggle("libseat-user-page", isUserPage());
     document.documentElement.classList.toggle("libseat-seat-room-page", isSeatRoomSelectPage());
     document.documentElement.classList.toggle("libseat-meeting-page", isMeetingReservePage());
     document.documentElement.classList.toggle("libseat-seat-reserve-page", isSeatReservePage());
@@ -1693,6 +1737,14 @@
       route.includes("/pages/index/index") ||
       (!!document.querySelector(".top-img") && !!document.querySelector(".function-list"))
     );
+  }
+
+  function isReserveEntryPage() {
+    return currentRouteText().includes(RESERVE_HOME_ROUTE);
+  }
+
+  function isUserPage() {
+    return currentRouteText().includes(USER_HOME_ROUTE);
   }
 
   function isMeetingReservePage() {
@@ -3577,6 +3629,23 @@
         },
         true
       );
+    });
+  }
+
+  function updateHomeTopLogo() {
+    if (!isHomePage()) return;
+    document.querySelectorAll(".top-img").forEach((image) => {
+      image.dataset.libseatHomeLogo = "1";
+      image.setAttribute("src", HOME_TOP_LOGO_URL);
+      image.querySelectorAll("img").forEach((img) => {
+        img.src = HOME_TOP_LOGO_URL;
+        img.removeAttribute("srcset");
+      });
+      image.querySelectorAll("div").forEach((node) => {
+        if (node.style && node.style.backgroundImage) {
+          node.style.backgroundImage = `url("${HOME_TOP_LOGO_URL}")`;
+        }
+      });
     });
   }
 
@@ -6382,6 +6451,7 @@
     applyPcWideClass();
     installRequestTimeGuard();
     installPageBridge();
+    updateHomeTopLogo();
     applySeatMapScale();
     stabilizeFacilityImages();
     classifySeatMap();
