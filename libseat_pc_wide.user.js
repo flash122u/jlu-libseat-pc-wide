@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.6
+// @version      1.18.7
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.6";
+  const SCRIPT_VERSION = "1.18.7";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -2068,7 +2068,13 @@
   }
 
   function isDateText(value) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
   }
 
   function isDateTimeText(value) {
@@ -4803,7 +4809,10 @@
   function meetingRoomStatusLabel(room, range) {
     const minutes = roomAvailableMinutes(room, range);
     if (minutes >= roomMinDurationMinutes(room)) return "空闲";
-    return cleanReservationText(room.statusLabel || room.cannotReserveReason) || "不可预约";
+    const reason = cleanReservationText(room && room.cannotReserveReason);
+    if (reason) return reason;
+    const label = cleanReservationText(room && room.statusLabel);
+    return label && label !== "空闲" ? label : "不可预约";
   }
 
   function meetingRoomMeta(room) {
@@ -4829,7 +4838,13 @@
     const range = controls.lastRange || meetingRangeFromControls(controls);
     const rooms = Array.isArray(controls.allRooms) ? controls.allRooms : [];
     const filters = meetingFilterValues(controls);
-    const filtered = range.error ? [] : rooms.filter((room) => meetingRoomMatchesFilters(room, range, filters));
+    if (range.error) {
+      controls.filteredRooms = [];
+      controls.grid.innerHTML = `<div class="libseat-meeting-room-empty">${escapeHtml(range.error)}</div>`;
+      controls.queryButton.title = range.error;
+      return;
+    }
+    const filtered = rooms.filter((room) => meetingRoomMatchesFilters(room, range, filters));
     controls.filteredRooms = filtered;
     document.documentElement.classList.add("libseat-meeting-custom-active");
 
@@ -4883,6 +4898,9 @@
     const range = meetingRangeFromControls(controls);
     if (range.error) {
       controls.queryButton.title = range.error;
+      controls.lastRange = null;
+      controls.filteredRooms = [];
+      if (controls.grid) controls.grid.innerHTML = `<div class="libseat-meeting-room-empty">${escapeHtml(range.error)}</div>`;
       return false;
     }
 
