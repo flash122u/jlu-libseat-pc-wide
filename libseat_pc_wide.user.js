@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.4
+// @version      1.18.5
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.4";
+  const SCRIPT_VERSION = "1.18.5";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -2253,8 +2253,10 @@
   function reservationRangeFromControls(block, controls, dateOverride) {
     const pickerValue = currentRangePickerValue(block);
     const date = String(dateOverride || controls.date || pickerValue.date || "").trim();
-    const startTime = normalizeTimeInputValue(controls.start.value || pickerValue.startTime || "");
-    const endTime = normalizeTimeInputValue(controls.end.value || pickerValue.endTime || "");
+    const startFallback = controls.fallbackToPicker ? pickerValue.startTime : "";
+    const endFallback = controls.fallbackToPicker ? pickerValue.endTime : "";
+    const startTime = normalizeTimeInputValue(controls.start.value || startFallback || "");
+    const endTime = normalizeTimeInputValue(controls.end.value || endFallback || "");
 
     if (!isDateText(date)) return { error: "日期格式不正确" };
     if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
@@ -4568,18 +4570,19 @@
     controls.autoCountdownTimer = window.setInterval(() => updateAutoCountdown(controls), 1000);
   }
 
-  function rangeControls(date, startInput, endInput) {
+  function rangeControls(date, startInput, endInput, fallbackToPicker) {
     return {
       date,
       start: startInput,
       end: endInput,
+      fallbackToPicker: !!fallbackToPicker,
     };
   }
 
   function queryRangeFromControls(block, controls) {
     return reservationRangeFromControls(
       block,
-      rangeControls(controls.date, controls.queryStart, controls.queryEnd),
+      rangeControls(controls.date, controls.queryStart, controls.queryEnd, true),
       controls.date
     );
   }
