@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.2
+// @version      1.18.3
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.2";
+  const SCRIPT_VERSION = "1.18.3";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -181,8 +181,8 @@
 
       .libseat-home-page .function-list {
         display: grid !important;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
-        gap: 16px !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 18px !important;
         width: min(100%, 980px) !important;
         margin: 18px auto 0 !important;
         z-index: auto !important;
@@ -194,8 +194,8 @@
         align-items: center !important;
         justify-content: center !important;
         width: auto !important;
-        min-height: 210px !important;
-        padding: 18px !important;
+        min-height: 374px !important;
+        padding: 16px !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
         background: #fff !important;
@@ -210,25 +210,40 @@
       }
 
       .libseat-home-page .function-list .function-item-image {
-        width: min(100%, 260px) !important;
-        height: 142px !important;
+        width: min(100%, 440px) !important;
+        height: 300px !important;
         border-radius: 8px !important;
         object-fit: cover !important;
         box-shadow: none !important;
       }
 
-      .libseat-home-page .function-list .function-item:first-child .function-item-image {
-        width: min(100%, 300px) !important;
-        height: 164px !important;
+      .libseat-home-page .function-list .function-item-image > div,
+      .libseat-home-page .function-list .function-item-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        background-size: cover !important;
       }
 
       .libseat-home-page .function-list .function-item-text {
-        margin-top: 12px !important;
-        color: #111827 !important;
-        font-size: 16px !important;
-        font-weight: 700 !important;
-        line-height: 22px !important;
+        margin-top: 14px !important;
+        color: #1f2937 !important;
+        font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", Arial, sans-serif !important;
+        font-size: 18px !important;
+        font-weight: 600 !important;
+        line-height: 26px !important;
         text-align: center !important;
+      }
+
+      .libseat-reserve-entry-page uni-app,
+      .libseat-reserve-entry-page uni-page,
+      .libseat-reserve-entry-page uni-page-wrapper,
+      .libseat-reserve-entry-page uni-page-body,
+      .libseat-user-page uni-app,
+      .libseat-user-page uni-page,
+      .libseat-user-page uni-page-wrapper,
+      .libseat-user-page uni-page-body {
+        background: #f5f7fa !important;
       }
 
       .libseat-reserve-entry-page uni-page-body,
