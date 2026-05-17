@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.10
+// @version      1.17.11
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.10";
+  const SCRIPT_VERSION = "1.17.11";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -318,6 +318,30 @@
       .libseat-meeting-query select:focus {
         border-color: #65cafd;
         box-shadow: 0 0 0 2px rgba(101, 202, 253, .18);
+      }
+
+      .libseat-meeting-status-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        height: 34px;
+      }
+
+      .libseat-meeting-status-option {
+        border: 1px solid #d6dde8;
+        border-radius: 6px;
+        background: #fff;
+        color: #334155;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .libseat-meeting-status-option.active {
+        border-color: #65cafd;
+        background: #eef9ff;
+        color: #075985;
+        font-weight: 700;
       }
 
       .libseat-meeting-room-grid {
@@ -2222,7 +2246,21 @@
         }
 
         function findMeetingPageVm(root) {
-          return walkVue(root || document.body, isMeetingReserveVm);
+          var found = walkVue(root || document.body, isMeetingReserveVm);
+          if (found) return found;
+
+          var stack = [root || document.body];
+          while (stack.length) {
+            var node = stack.shift();
+            if (!node) continue;
+            found = walkVue(node, isMeetingReserveVm);
+            if (found) return found;
+            var children = node.children || [];
+            for (var i = 0; i < children.length; i += 1) {
+              stack.push(children[i]);
+            }
+          }
+          return null;
         }
 
         function meetingSnapshot(root) {
@@ -2350,6 +2388,7 @@
           } catch (error) {
             setReactive(vm, "visible", true);
           }
+          setReactive(vm, "visible", true);
           if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
           return true;
         }
@@ -3760,10 +3799,18 @@
 
   function meetingFilterValues(controls) {
     return {
-      status: controls.statusFilter.value,
+      status: controls.statusValue.value,
       floor: cleanReservationText(controls.floorFilter.value),
       attendees: numericInputValue(controls.attendeesInput),
     };
+  }
+
+  function setMeetingStatusFilter(controls, value) {
+    controls.statusValue.value = value;
+    controls.statusButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.value === value);
+    });
+    renderMeetingRooms(controls);
   }
 
   function meetingRoomMatchesFilters(room, range, filters) {
@@ -4432,15 +4479,21 @@
         </div>
         <div class="libseat-time-field">
           <label>状态</label>
-          <select class="libseat-meeting-status-filter" aria-label="状态筛选">
-            <option value="">全部</option>
-            <option value="FREE">空闲</option>
-            <option value="BUSY">使用中/预约中</option>
-          </select>
+          <div class="libseat-meeting-status-options" role="group" aria-label="状态筛选">
+            <button class="libseat-meeting-status-option active" type="button" data-value="FREE">空闲</button>
+            <button class="libseat-meeting-status-option" type="button" data-value="BUSY">使用中/预约中</button>
+          </div>
+          <input class="libseat-meeting-status-value" type="hidden" value="FREE">
         </div>
         <div class="libseat-time-field">
           <label>楼层</label>
-          <input class="libseat-meeting-floor-filter" type="text" inputmode="text" autocomplete="off" placeholder="5楼" aria-label="楼层筛选">
+          <select class="libseat-meeting-floor-filter" aria-label="楼层筛选">
+            <option value="">全部</option>
+            <option value="2楼">2楼</option>
+            <option value="3楼">3楼</option>
+            <option value="4楼">4楼</option>
+            <option value="5楼">5楼</option>
+          </select>
         </div>
         <div class="libseat-time-field">
           <label>预约人数</label>
@@ -4462,7 +4515,8 @@
       dateInput: wrapper.querySelector(".libseat-meeting-date-input"),
       queryStart: wrapper.querySelector(".libseat-meeting-start-input"),
       queryEnd: wrapper.querySelector(".libseat-meeting-end-input"),
-      statusFilter: wrapper.querySelector(".libseat-meeting-status-filter"),
+      statusValue: wrapper.querySelector(".libseat-meeting-status-value"),
+      statusButtons: Array.from(wrapper.querySelectorAll(".libseat-meeting-status-option")),
       floorFilter: wrapper.querySelector(".libseat-meeting-floor-filter"),
       attendeesInput: wrapper.querySelector(".libseat-meeting-attendees-input"),
       queryButton: wrapper.querySelector(".libseat-meeting-query-button"),
@@ -4483,7 +4537,10 @@
     controls.dateInput.addEventListener("input", () => {
       controls.date = controls.dateInput.value.trim();
     });
-    [controls.statusFilter, controls.floorFilter, controls.attendeesInput].forEach((input) => {
+    controls.statusButtons.forEach((button) => {
+      button.addEventListener("click", () => setMeetingStatusFilter(controls, button.dataset.value || "FREE"));
+    });
+    [controls.floorFilter, controls.attendeesInput].forEach((input) => {
       input.addEventListener("input", () => renderMeetingRooms(controls));
       input.addEventListener("change", () => renderMeetingRooms(controls));
     });
