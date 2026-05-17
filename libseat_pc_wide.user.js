@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.9
+// @version      1.17.10
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.9";
+  const SCRIPT_VERSION = "1.17.10";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -291,7 +291,7 @@
 
       .libseat-meeting-query {
         display: grid;
-        grid-template-columns: minmax(128px, .8fr) minmax(88px, .45fr) minmax(88px, .45fr) minmax(118px, .6fr) minmax(100px, .55fr) minmax(96px, .45fr) minmax(96px, .45fr) auto;
+        grid-template-columns: minmax(128px, .8fr) minmax(88px, .45fr) minmax(88px, .45fr) minmax(118px, .6fr) minmax(100px, .55fr) minmax(96px, .45fr) auto;
         align-items: end;
         gap: 8px;
       }
@@ -347,10 +347,6 @@
 
       .libseat-meeting-room-card:hover {
         border-color: #65cafd;
-      }
-
-      .libseat-meeting-room-card.unavailable {
-        cursor: default;
       }
 
       .libseat-meeting-room-name {
@@ -2254,6 +2250,7 @@
           var nativeSetLocalPaging = paging && paging.setLocalPaging;
           var rooms = [];
           var seen = {};
+          var roomById = {};
           var size = Math.max(Number(pageSize) || 10, 1);
           var pageNo = 1;
           var safety = 0;
@@ -2266,6 +2263,7 @@
               var key = String(room && room.id);
               if (seen[key]) continue;
               seen[key] = true;
+              roomById[key] = room;
               rooms.push(room);
               added += 1;
             }
@@ -2301,6 +2299,7 @@
           return new Promise(function (resolve) {
             function finish() {
               restorePagingComplete();
+              setReactive(vm, "__libseatPcWideMeetingRoomById", roomById);
               resolve({
                 rooms: rooms.map(copyMeetingRoom),
                 timeRange: range || null
@@ -2335,16 +2334,19 @@
         function openMeetingRoom(rooms, index, timeRange) {
           var vm = findMeetingPageVm(document.body);
           if (!vm || !Array.isArray(rooms)) return false;
-          var list = rooms.slice();
           var targetIndex = Number(index);
-          if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= list.length) return false;
+          if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= rooms.length) return false;
+          var selected = rooms[targetIndex];
+          var roomById = vm.__libseatPcWideMeetingRoomById || {};
+          var original = roomById[String(selected && selected.id)] || selected;
+          var list = [original];
           setReactive(vm, "dataList", list);
           if (vm.timeRange && timeRange) {
             setReactive(vm, "timeRange", Object.assign({}, vm.timeRange, timeRange));
           }
-          if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", targetIndex);
+          if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", 0);
           try {
-            vm.chooseRoom(targetIndex);
+            vm.chooseRoom(0);
           } catch (error) {
             setReactive(vm, "visible", true);
           }
@@ -3720,6 +3722,15 @@
     return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
+  function roomAllowsAttendees(room, attendees) {
+    if (attendees === null) return true;
+    const capacity = roomCapacity(room);
+    const minAttendees = roomMinAttendees(room);
+    if (minAttendees > 0 && attendees < minAttendees) return false;
+    if (capacity > 0 && attendees > capacity) return false;
+    return true;
+  }
+
   function roomAvailableMinutes(room, range) {
     if (!room || room.canReserve === false || normalizedRoomStatus(room) !== "FREE") return 0;
     const queryStart = timeToMinutes(range && range.startTime);
@@ -3751,8 +3762,7 @@
     return {
       status: controls.statusFilter.value,
       floor: cleanReservationText(controls.floorFilter.value),
-      minAttendees: numericInputValue(controls.minAttendeesInput),
-      maxAttendees: numericInputValue(controls.maxAttendeesInput),
+      attendees: numericInputValue(controls.attendeesInput),
     };
   }
 
@@ -3760,21 +3770,15 @@
     if (!room) return false;
     const availabilityClass = meetingRoomAvailabilityClass(room, range);
     if (filters.status === "FREE" && (normalizedRoomStatus(room) !== "FREE" || room.canReserve === false)) return false;
-    if (filters.status && filters.status !== "FREE" && filters.status !== availabilityClass) return false;
+    if (filters.status === "BUSY" && availabilityClass !== "libseat-meeting-room-unavailable") return false;
+    if (filters.status && filters.status !== "FREE" && filters.status !== "BUSY" && filters.status !== availabilityClass) return false;
 
     if (filters.floor) {
       const text = cleanReservationText([meetingRoomFloorText(room), room.parentNamePath].filter(Boolean).join(" "));
       if (!text.includes(filters.floor)) return false;
     }
 
-    const capacity = roomCapacity(room);
-    const minAttendees = roomMinAttendees(room);
-    if (filters.minAttendees !== null) {
-      if (capacity > 0 && capacity < filters.minAttendees) return false;
-      if (minAttendees > 0 && minAttendees > filters.minAttendees) return false;
-    }
-    if (filters.maxAttendees !== null && capacity > 0 && capacity > filters.maxAttendees) return false;
-    return true;
+    return roomAllowsAttendees(room, filters.attendees);
   }
 
   function meetingRoomStatusLabel(room, range) {
@@ -3833,7 +3837,6 @@
         const room = filtered[index];
         if (!room || meetingRoomAvailabilityClass(room, range) === "libseat-meeting-room-unavailable") {
           card.title = cleanReservationText(room && (room.cannotReserveReason || room.statusLabel)) || "当前不可预约";
-          return;
         }
         openMeetingRoomFromPage(filtered, index, range);
       });
@@ -4432,10 +4435,7 @@
           <select class="libseat-meeting-status-filter" aria-label="状态筛选">
             <option value="">全部</option>
             <option value="FREE">空闲</option>
-            <option value="libseat-meeting-room-free-30">30分钟-1小时</option>
-            <option value="libseat-meeting-room-free-60">1-2小时</option>
-            <option value="libseat-meeting-room-free-120">2小时以上</option>
-            <option value="libseat-meeting-room-unavailable">占用/不可预约</option>
+            <option value="BUSY">使用中/预约中</option>
           </select>
         </div>
         <div class="libseat-time-field">
@@ -4443,12 +4443,8 @@
           <input class="libseat-meeting-floor-filter" type="text" inputmode="text" autocomplete="off" placeholder="5楼" aria-label="楼层筛选">
         </div>
         <div class="libseat-time-field">
-          <label>最少人数</label>
-          <input class="libseat-meeting-min-attendees-input" type="text" inputmode="numeric" autocomplete="off" placeholder="人数" aria-label="最少人数筛选">
-        </div>
-        <div class="libseat-time-field">
-          <label>最多人数</label>
-          <input class="libseat-meeting-max-attendees-input" type="text" inputmode="numeric" autocomplete="off" placeholder="人数" aria-label="最多人数筛选">
+          <label>预约人数</label>
+          <input class="libseat-meeting-attendees-input" type="text" inputmode="numeric" autocomplete="off" placeholder="人数" aria-label="预约人数筛选">
         </div>
         <button class="libseat-reserve-button libseat-meeting-query-button" type="button">按条件查询</button>
       </div>
@@ -4468,8 +4464,7 @@
       queryEnd: wrapper.querySelector(".libseat-meeting-end-input"),
       statusFilter: wrapper.querySelector(".libseat-meeting-status-filter"),
       floorFilter: wrapper.querySelector(".libseat-meeting-floor-filter"),
-      minAttendeesInput: wrapper.querySelector(".libseat-meeting-min-attendees-input"),
-      maxAttendeesInput: wrapper.querySelector(".libseat-meeting-max-attendees-input"),
+      attendeesInput: wrapper.querySelector(".libseat-meeting-attendees-input"),
       queryButton: wrapper.querySelector(".libseat-meeting-query-button"),
       allRooms: [],
       filteredRooms: [],
@@ -4488,7 +4483,7 @@
     controls.dateInput.addEventListener("input", () => {
       controls.date = controls.dateInput.value.trim();
     });
-    [controls.statusFilter, controls.floorFilter, controls.minAttendeesInput, controls.maxAttendeesInput].forEach((input) => {
+    [controls.statusFilter, controls.floorFilter, controls.attendeesInput].forEach((input) => {
       input.addEventListener("input", () => renderMeetingRooms(controls));
       input.addEventListener("change", () => renderMeetingRooms(controls));
     });
