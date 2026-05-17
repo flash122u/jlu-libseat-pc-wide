@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.3
+// @version      1.18.4
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.3";
+  const SCRIPT_VERSION = "1.18.4";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -194,7 +194,7 @@
         align-items: center !important;
         justify-content: center !important;
         width: auto !important;
-        min-height: 374px !important;
+        min-height: 250px !important;
         padding: 16px !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
@@ -213,7 +213,7 @@
         width: min(100%, 300px) !important;
         height: 180px !important;
         border-radius: 8px !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
         box-shadow: none !important;
       }
 
@@ -221,8 +221,10 @@
       .libseat-home-page .function-list .function-item-image img {
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important;
-        background-size: cover !important;
+        object-fit: contain !important;
+        background-size: contain !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
       }
 
       .libseat-home-page .function-list .function-item-text {
