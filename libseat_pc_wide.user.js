@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.12
+// @version      1.17.13
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.12";
+  const SCRIPT_VERSION = "1.17.13";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -291,7 +291,7 @@
 
       .libseat-meeting-query {
         display: grid;
-        grid-template-columns: minmax(128px, .8fr) minmax(88px, .45fr) minmax(88px, .45fr) minmax(118px, .6fr) minmax(100px, .55fr) minmax(96px, .45fr) auto;
+        grid-template-columns: repeat(6, minmax(112px, 1fr)) auto;
         align-items: end;
         gap: 8px;
       }
@@ -324,6 +324,7 @@
         display: grid;
         gap: 4px;
         height: 34px;
+        width: 100%;
       }
 
       .libseat-meeting-toggle-options.two {
@@ -335,12 +336,18 @@
       }
 
       .libseat-meeting-toggle-option {
+        width: 100%;
+        min-width: 0;
+        height: 34px;
+        padding: 0 6px;
         border: 1px solid #d6dde8;
         border-radius: 6px;
         background: #fff;
         color: #334155;
         font: inherit;
         font-size: 13px;
+        line-height: 1.1;
+        white-space: nowrap;
         cursor: pointer;
       }
 
@@ -2345,6 +2352,7 @@
             function finish() {
               restorePagingComplete();
               setReactive(vm, "__libseatPcWideMeetingRoomById", roomById);
+              setReactive(vm, "__libseatPcWideMeetingRooms", rooms.slice());
               resolve({
                 rooms: rooms.map(copyMeetingRoom),
                 timeRange: range || null
@@ -2383,27 +2391,49 @@
           if (!Number.isFinite(targetIndex) || targetIndex < 0 || targetIndex >= rooms.length) return false;
           var selected = rooms[targetIndex];
           var roomById = vm.__libseatPcWideMeetingRoomById || {};
-          var original = roomById[String(selected && selected.id)] || selected;
-          var list = [original];
+          var selectedId = String(selected && selected.id);
+          var rawRooms = Array.isArray(vm.__libseatPcWideMeetingRooms) ? vm.__libseatPcWideMeetingRooms : [];
+          var list = [];
+          var resolvedIndex = -1;
+
+          if (rawRooms.length) {
+            for (var rawIndex = 0; rawIndex < rawRooms.length; rawIndex += 1) {
+              list.push(rawRooms[rawIndex]);
+              if (String(rawRooms[rawIndex] && rawRooms[rawIndex].id) === selectedId) resolvedIndex = rawIndex;
+            }
+          }
+
+          if (!list.length || resolvedIndex < 0) {
+            list = [];
+            for (var roomIndex = 0; roomIndex < rooms.length; roomIndex += 1) {
+              var room = rooms[roomIndex];
+              var original = roomById[String(room && room.id)] || room;
+              list.push(original);
+              if (String(original && original.id) === selectedId) resolvedIndex = roomIndex;
+            }
+          }
+
+          if (resolvedIndex < 0) resolvedIndex = targetIndex;
           setReactive(vm, "dataList", list);
           if (vm.timeRange && timeRange) {
             setReactive(vm, "timeRange", Object.assign({}, vm.timeRange, timeRange));
           }
-          if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", 0);
-          setReactive(vm, "visible", false);
+          if (Object.prototype.hasOwnProperty.call(vm, "chooseIndex")) setReactive(vm, "chooseIndex", resolvedIndex);
           if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
 
           function show() {
+            setReactive(vm, "dataList", list);
+            setReactive(vm, "chooseIndex", resolvedIndex);
             try {
-              vm.chooseRoom(0);
+              vm.chooseRoom(resolvedIndex);
             } catch (error) {
-              setReactive(vm, "chooseIndex", 0);
               setReactive(vm, "visible", true);
             }
             setReactive(vm, "visible", true);
             if (typeof vm.$forceUpdate === "function") vm.$forceUpdate();
           }
 
+          show();
           if (typeof vm.$nextTick === "function") {
             vm.$nextTick(function () {
               setTimeout(show, 0);
@@ -2411,6 +2441,7 @@
           } else {
             setTimeout(show, 0);
           }
+          setTimeout(show, 80);
           return true;
         }
 
@@ -3903,14 +3934,23 @@
       .join("");
 
     controls.grid.querySelectorAll(".libseat-meeting-room-card").forEach((card) => {
-      card.addEventListener("click", () => {
+      let lastOpenAt = 0;
+      const openCard = (event) => {
+        if (event.type === "mousedown" && event.button !== 0) return;
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        const now = Date.now();
+        if (now - lastOpenAt < 250) return;
+        lastOpenAt = now;
         const index = Number(card.dataset.index);
         const room = filtered[index];
         if (!room || meetingRoomAvailabilityClass(room, range) === "libseat-meeting-room-unavailable") {
           card.title = cleanReservationText(room && (room.cannotReserveReason || room.statusLabel)) || "当前不可预约";
         }
         openMeetingRoomFromPage(filtered, index, range);
-      });
+      };
+      card.addEventListener("mousedown", openCard);
+      card.addEventListener("click", openCard);
     });
 
     controls.queryButton.title = `显示 ${filtered.length}/${rooms.length} 个研修间`;
