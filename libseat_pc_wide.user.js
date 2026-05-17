@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.22
+// @version      1.17.23
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.22";
+  const SCRIPT_VERSION = "1.17.23";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -52,6 +52,7 @@
   let enhanceQueued = false;
   let seatMapLayoutQueued = false;
   let meetingRoomState = null;
+  let meetingModalContext = null;
   const RANGE_PICKER_SELECTOR =
     "body > uni-app > uni-page > uni-page-wrapper > uni-page-body > uni-view > uni-view.paging > uni-view > uni-view";
   const REQUEST_TIME_GUARD_SCRIPT_ID = "libseat-pc-wide-request-time-guard";
@@ -3373,13 +3374,62 @@
     const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
     const bridge = pageWindow.__libseatPcWideBridge;
     if (!bridge || typeof bridge.openMeetingRoom !== "function") return false;
+    const targetIndex = Number(index);
+    const selected = Array.isArray(rooms) && Number.isFinite(targetIndex) ? rooms[targetIndex] : null;
+    if (selected && selected.id) setMeetingModalContext(selected, range);
 
     try {
-      return bridge.openMeetingRoom(rooms, index, range);
+      const opened = bridge.openMeetingRoom(rooms, index, range);
+      if (opened) {
+        clearVisibleMeetingReservations();
+        [0, 80, 180].forEach((delay) => {
+          setTimeout(() => {
+            const modal = document.querySelector(".reserve-modal .e-modal_show");
+            if (modal) refreshMeetingModalReservations(modal);
+          }, delay);
+        });
+      }
+      return opened;
     } catch (error) {
       debugFacilityAssets("meeting bridge open failed", { message: error && error.message });
       return false;
     }
+  }
+
+  function setMeetingModalContext(room, range) {
+    meetingModalContext = {
+      room,
+      range: range ? Object.assign({}, range) : null,
+    };
+  }
+
+  function modalRoomCandidate(modalVm) {
+    return modalVm && (modalVm.room || modalVm.meetingRoom || modalVm.currentRoom);
+  }
+
+  function currentMeetingModalRoom(modalVm) {
+    const room = modalRoomCandidate(modalVm);
+    const contextRoom = meetingModalContext && meetingModalContext.room;
+    if (!contextRoom || !contextRoom.id) return room || null;
+    return contextRoom;
+  }
+
+  function currentMeetingModalRangeValue(modalVm) {
+    return (modalVm && modalVm.timeRange) || (meetingModalContext && meetingModalContext.range) || {};
+  }
+
+  function clearVisibleMeetingReservations() {
+    document.querySelectorAll(".reserve-modal .e-modal_show").forEach((modal) => {
+      delete modal.dataset.libseatMeetingReservationsKey;
+      const modalVm = findMeetingModalVm(modal);
+      if (!modalVm) return;
+      if (typeof modalVm.$set === "function") {
+        modalVm.$set(modalVm, "reservations", []);
+      } else {
+        modalVm.reservations = [];
+      }
+      if (typeof modalVm.$forceUpdate === "function") modalVm.$forceUpdate();
+    });
   }
 
   function enhanceReservationUserLabels() {
@@ -5628,10 +5678,13 @@
   function refreshMeetingModalReservations(block) {
     const modalVm = findMeetingModalVm(block);
     if (!modalVm) return false;
-    const room = modalVm.room || modalVm.meetingRoom || modalVm.currentRoom;
+    const room = currentMeetingModalRoom(modalVm);
     const range = meetingModalRange(modalVm);
     if (room && room.id && !range.error) {
       fetchMeetingRoomReservationsByDate(room.id, range.date).then((result) => {
+        const activeRoom = currentMeetingModalRoom(modalVm);
+        const activeRange = meetingModalRange(modalVm);
+        if (!activeRoom || String(activeRoom.id) !== String(room.id) || activeRange.error || activeRange.date !== range.date) return;
         if (!result.ok || !Array.isArray(result.data)) return;
         if (typeof modalVm.$set === "function") {
           modalVm.$set(modalVm, "reservations", result.data);
@@ -5670,7 +5723,7 @@
   }
 
   function meetingModalRange(modalVm) {
-    const value = completeTimeRangeValue((modalVm && modalVm.timeRange) || {}, todayText());
+    const value = completeTimeRangeValue(currentMeetingModalRangeValue(modalVm), todayText());
     const startTime = normalizeTimeInputValue(value.startTime);
     const endTime = normalizeTimeInputValue(value.endTime);
     if (!isDateText(value.date)) return { error: "日期格式不正确" };
@@ -5769,7 +5822,7 @@
     const state = meetingInlineState(form);
     if (state.submitting) return;
     const modalVm = findMeetingModalVm(form);
-    const room = modalVm && (modalVm.room || modalVm.meetingRoom || modalVm.currentRoom);
+    const room = currentMeetingModalRoom(modalVm);
     const range = meetingModalRange(modalVm);
     const titleInput = form.querySelector(".libseat-meeting-title-input");
     const contentInput = form.querySelector(".libseat-meeting-content-input");
@@ -5895,7 +5948,7 @@
       ensureMeetingInlineApplicationForm(modal);
       bindMeetingInlinePrimarySubmit(modal);
       const modalVm = findMeetingModalVm(modal);
-      const room = modalVm && (modalVm.room || modalVm.meetingRoom || modalVm.currentRoom);
+      const room = currentMeetingModalRoom(modalVm);
       const range = meetingModalRange(modalVm);
       const key = room && room.id && !range.error ? `${room.id}|${range.date}` : "";
       if (key && modal.dataset.libseatMeetingReservationsKey !== key) {
