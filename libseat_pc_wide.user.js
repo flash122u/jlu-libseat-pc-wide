@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.13
+// @version      1.17.14
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.13";
+  const SCRIPT_VERSION = "1.17.14";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -291,7 +291,7 @@
 
       .libseat-meeting-query {
         display: grid;
-        grid-template-columns: repeat(6, minmax(112px, 1fr)) auto;
+        grid-template-columns: minmax(132px, .8fr) minmax(92px, .52fr) minmax(92px, .52fr) minmax(164px, .9fr) minmax(184px, 1fr) minmax(96px, .56fr) auto;
         align-items: end;
         gap: 8px;
       }
@@ -323,7 +323,7 @@
       .libseat-meeting-toggle-options {
         display: grid;
         gap: 4px;
-        height: 34px;
+        height: 36px;
         width: 100%;
       }
 
@@ -338,8 +338,8 @@
       .libseat-meeting-toggle-option {
         width: 100%;
         min-width: 0;
-        height: 34px;
-        padding: 0 6px;
+        height: 36px;
+        padding: 0 8px;
         border: 1px solid #d6dde8;
         border-radius: 6px;
         background: #fff;
@@ -464,6 +464,64 @@
         color: #64748b;
         font-size: 14px;
         text-align: center;
+      }
+
+      .reserve-modal .e-modal {
+        width: min(960px, 92vw) !important;
+        max-width: 92vw !important;
+      }
+
+      .reserve-modal .e-modal uni-scroll-view,
+      .reserve-modal .e-modal uni-scroll-view > div,
+      .reserve-modal .e-modal uni-scroll-view > div > div,
+      .reserve-modal .e-modal uni-scroll-view > div > div > div {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .reserve-modal .modal-body {
+        display: block !important;
+        width: min(900px, calc(92vw - 48px)) !important;
+        max-width: 100% !important;
+        max-height: 72vh !important;
+        overflow: auto !important;
+        padding: 18px !important;
+        box-sizing: border-box !important;
+      }
+
+      .reserve-modal .pick-step {
+        display: grid !important;
+        grid-template-columns: minmax(250px, .9fr) minmax(320px, 1.1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 14px !important;
+        align-items: start !important;
+      }
+
+      .reserve-modal .info-section {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        min-width: 0;
+      }
+
+      .reserve-modal .time-section {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+      }
+
+      .reserve-modal .reservations-section {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+      }
+
+      .reserve-modal .room-info {
+        margin-bottom: 0 !important;
+      }
+
+      .reserve-modal .reservations-list {
+        max-height: 260px !important;
       }
 
       .libseat-meeting-slot-grid {
@@ -3897,8 +3955,13 @@
     const minAttendees = roomMinAttendees(room);
     if (location) parts.push(location);
     if (time) parts.push(time);
-    if (capacity) parts.push(`最多${capacity}人`);
-    if (minAttendees) parts.push(`最少${minAttendees}人`);
+    if (capacity && minAttendees) {
+      parts.push(`${minAttendees}-${capacity}人`);
+    } else if (capacity) {
+      parts.push(`${capacity}人`);
+    } else if (minAttendees) {
+      parts.push(`${minAttendees}人起`);
+    }
     return parts.join(" / ");
   }
 
