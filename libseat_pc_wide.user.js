@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.7
+// @version      1.18.8
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.7";
+  const SCRIPT_VERSION = "1.18.8";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -2256,19 +2256,23 @@
     return snapshot && snapshot.rule ? snapshot.rule : null;
   }
 
-  function reservationRangeFromControls(block, controls, dateOverride) {
+  function reservationRangeFromControls(block, controls, dateOverride, options) {
     const pickerValue = currentRangePickerValue(block);
     const date = String(dateOverride || controls.date || pickerValue.date || "").trim();
     const startFallback = controls.fallbackToPicker ? pickerValue.startTime : "";
     const endFallback = controls.fallbackToPicker ? pickerValue.endTime : "";
-    const startTime = normalizeTimeInputValue(controls.start.value || startFallback || "");
-    const endTime = normalizeTimeInputValue(controls.end.value || endFallback || "");
+    const normalizeOptions = { completeOnly: !!(options && options.completeOnly) };
+    const startTime = normalizeTimeInputValue(controls.start.value || startFallback || "", normalizeOptions);
+    const endTime = normalizeTimeInputValue(controls.end.value || endFallback || "", normalizeOptions);
+    const writeBack = !(options && options.writeBack === false);
 
     if (!isDateText(date)) return { error: "日期格式不正确" };
     if (!isTimeText(startTime) || !isTimeText(endTime)) return { error: "时间格式不正确" };
 
-    controls.start.value = startTime;
-    controls.end.value = endTime;
+    if (writeBack) {
+      controls.start.value = startTime;
+      controls.end.value = endTime;
+    }
 
     const startMinutes = timeToMinutes(startTime);
     const endMinutes = timeToMinutes(endTime);
@@ -3488,19 +3492,40 @@
     return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
   }
 
-  function normalizeTimeInputValue(value) {
+  function normalizeTimeInputValue(value, options) {
     const raw = String(value || "").trim();
     if (isTimeText(raw)) return raw;
 
+    const colonMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (colonMatch) {
+      const hour = Number(colonMatch[1]);
+      const minute = Number(colonMatch[2]);
+      if (hour > 23 || minute > 59) return "";
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+
     const digits = raw.replace(/\D/g, "");
     if (!digits || digits.length > 4) return "";
+    if (options && options.completeOnly && digits.length !== 4) return "";
 
-    const padded = digits.padStart(4, "0");
-    const hour = Number(padded.slice(0, 2));
-    const minute = Number(padded.slice(2));
+    let hourText = "";
+    let minuteText = "";
+    if (digits.length <= 2) {
+      hourText = digits;
+      minuteText = "00";
+    } else if (digits.length === 3) {
+      hourText = digits.slice(0, 1);
+      minuteText = digits.slice(1);
+    } else {
+      hourText = digits.slice(0, 2);
+      minuteText = digits.slice(2);
+    }
+
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
     if (hour > 23 || minute > 59) return "";
 
-    return `${padded.slice(0, 2)}:${padded.slice(2)}`;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
 
   function normalizeTimeInputWhenComplete(input) {
@@ -4610,21 +4635,23 @@
     );
   }
 
-  function manualRangeFromControls(block, controls) {
+  function manualRangeFromControls(block, controls, options) {
     return reservationRangeFromControls(
       block,
       rangeControls(todayText(), controls.manualStart, controls.manualEnd),
-      todayText()
+      todayText(),
+      options
     );
   }
 
-  function autoRangeFromControls(block, controls, submitTime) {
+  function autoRangeFromControls(block, controls, submitTime, options) {
     const target = submitTime || nextAutoSubmitDelay().target;
     const reserveDate = autoReservationDateForSubmitTime(target);
     return reservationRangeFromControls(
       block,
       rangeControls(reserveDate, controls.autoStart, controls.autoEnd),
-      reserveDate
+      reserveDate,
+      options
     );
   }
 
@@ -4962,7 +4989,7 @@
   function updateReserveButtonDetail(block, controls, force) {
     if (controls.busy) return;
 
-    const range = manualRangeFromControls(block, controls);
+    const range = manualRangeFromControls(block, controls, { completeOnly: true, writeBack: false });
     const resolved = resolveSingleSeatCandidate(controls.manualSeat.value);
     const canUpdateStatus = force || !controls.status.dataset.libseatTone;
     if (range.error || !resolved.seat) {
@@ -5098,7 +5125,7 @@
   function updateAutoReservationDetail(block, controls, force) {
     if (controls.busy || controls.autoEnabled) return;
 
-    const range = autoRangeFromControls(block, controls);
+    const range = autoRangeFromControls(block, controls, null, { completeOnly: true, writeBack: false });
     const resolved = resolveSeatCandidates(controls.autoSeat.value);
     const canUpdateStatus = force || !controls.autoStatus.dataset.libseatTone;
     if (range.error || !resolved.seats.length) {
