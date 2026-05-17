@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.17.21
+// @version      1.17.22
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.17.21";
+  const SCRIPT_VERSION = "1.17.22";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -2092,6 +2092,18 @@
     return Array.isArray(result.data.list) ? result.data.list : [];
   }
 
+  function meetingRoomReservationsByDatePath(roomId, date) {
+    return `${MEETING_ROOM_PATH}/${encodeURIComponent(roomId)}/reservations/by-date?date=${encodeURIComponent(date)}`;
+  }
+
+  async function fetchMeetingRoomReservationsByDate(roomId, date) {
+    return fetchReservationJson(meetingRoomReservationsByDatePath(roomId, date), {
+      method: "GET",
+      headers: reservationHeaders(false),
+      timeoutMs: 8000,
+    });
+  }
+
   function meetingUserFreePath(code, range) {
     const search = new URLSearchParams({
       startTime: range.startDateTime,
@@ -2226,6 +2238,18 @@
     if (content) parts.push(`内容：${content}`);
     if (attendees) parts.push(`参会：${attendees}`);
     return parts.join(" / ");
+  }
+
+  function reservationIdentityKey(reservation) {
+    if (!reservation || typeof reservation !== "object") return "";
+    return [
+      reservation.reservationId || reservation.id || "",
+      reservation.userId || "",
+      cleanReservationText(reservation.time || ""),
+      cleanReservationText(reservation.startTime || ""),
+      cleanReservationText(reservation.endTime || ""),
+      cleanReservationText(reservation.status || ""),
+    ].join("|");
   }
 
   async function verifyActiveReservation(seatId, startTime, endTime) {
@@ -3396,7 +3420,10 @@
         if (list.closest(".reserve-modal")) {
           Array.from(list.querySelectorAll(".reservation-item")).forEach((item, index) => {
             const reservation = modalVm.reservations[index];
-            if (!reservation || item.dataset.libseatMeetingReservationEnhanced === "1") return;
+            if (!reservation) return;
+            const reservationKey = reservationIdentityKey(reservation);
+            if (item.dataset.libseatMeetingReservationKey === reservationKey) return;
+            item.dataset.libseatMeetingReservationKey = reservationKey;
             item.dataset.libseatMeetingReservationEnhanced = "1";
 
             const timeNode = item.querySelector(".reservation-time");
@@ -3405,20 +3432,23 @@
             if (userNode) userNode.textContent = reservationUserFallback(reservation) || cleanReservationText(userNode.textContent);
 
             const status = reservationStatusText(reservation.status || reservation.reservationStatus || reservation.state);
-            if (status && !item.querySelector(".libseat-meeting-reservation-status")) {
-              const statusNode = document.createElement("div");
+            if (status) {
+              const statusNode = item.querySelector(".libseat-meeting-reservation-status") || document.createElement("div");
               statusNode.className = "libseat-meeting-reservation-status";
               statusNode.textContent = status;
-              item.appendChild(statusNode);
+              if (!statusNode.parentNode) item.appendChild(statusNode);
             }
 
             const extra = meetingReservationExtraText(reservation);
-            if (extra && !item.querySelector(".libseat-meeting-reservation-extra")) {
-              const extraNode = document.createElement("div");
+            const existingExtra = item.querySelector(".libseat-meeting-reservation-extra");
+            if (extra) {
+              const extraNode = existingExtra || document.createElement("div");
               extraNode.className = "libseat-meeting-reservation-extra";
               extraNode.textContent = extra;
               extraNode.title = extra;
-              item.appendChild(extraNode);
+              if (!extraNode.parentNode) item.appendChild(extraNode);
+            } else if (existingExtra) {
+              existingExtra.remove();
             }
           });
         }
@@ -5598,6 +5628,21 @@
   function refreshMeetingModalReservations(block) {
     const modalVm = findMeetingModalVm(block);
     if (!modalVm) return false;
+    const room = modalVm.room || modalVm.meetingRoom || modalVm.currentRoom;
+    const range = meetingModalRange(modalVm);
+    if (room && room.id && !range.error) {
+      fetchMeetingRoomReservationsByDate(room.id, range.date).then((result) => {
+        if (!result.ok || !Array.isArray(result.data)) return;
+        if (typeof modalVm.$set === "function") {
+          modalVm.$set(modalVm, "reservations", result.data);
+        } else {
+          modalVm.reservations = result.data;
+        }
+        if (typeof modalVm.$forceUpdate === "function") modalVm.$forceUpdate();
+        window.setTimeout(enhanceReservationUserLabels, 0);
+      });
+      return true;
+    }
     const names = ["getMeetingReservations", "getReservations", "queryReservations", "initReservations"];
     for (const name of names) {
       if (typeof modalVm[name] !== "function") continue;
@@ -5849,6 +5894,18 @@
     document.querySelectorAll(".reserve-modal .e-modal_show").forEach((modal) => {
       ensureMeetingInlineApplicationForm(modal);
       bindMeetingInlinePrimarySubmit(modal);
+      const modalVm = findMeetingModalVm(modal);
+      const room = modalVm && (modalVm.room || modalVm.meetingRoom || modalVm.currentRoom);
+      const range = meetingModalRange(modalVm);
+      const key = room && room.id && !range.error ? `${room.id}|${range.date}` : "";
+      if (key && modal.dataset.libseatMeetingReservationsKey !== key) {
+        modal.dataset.libseatMeetingReservationsKey = key;
+        if (modalVm) {
+          if (typeof modalVm.$set === "function") modalVm.$set(modalVm, "reservations", []);
+          else modalVm.reservations = [];
+        }
+        refreshMeetingModalReservations(modal);
+      }
     });
   }
 
