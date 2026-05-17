@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JLU LibSeat PC Wide Layout
 // @namespace    local.libseat.pcwide
-// @version      1.18.9
+// @version      1.18.10
 // @description  Improve libseat.jlu.edu.cn desktop layout, seat map scale, cover images, and time inputs.
 // @match        https://libseat.jlu.edu.cn/*
 // @run-at       document-start
@@ -17,7 +17,7 @@
   const SEAT_MAP_PADDING = 24;
   const FACILITY_DOM_STABLE_MS = 120;
   const FACILITY_REVEAL_FALLBACK_MS = 450;
-  const SCRIPT_VERSION = "1.18.9";
+  const SCRIPT_VERSION = "1.18.10";
   const RESERVE_CONFIG_STORAGE_KEY = "libseatPcWideReserveConfig";
   const DAY_OPEN_TIME = "08:00";
   const DAY_CLOSE_TIME = "22:00";
@@ -260,6 +260,27 @@
         padding-left: 28px !important;
         padding-right: 28px !important;
         background: #f5f7fa !important;
+      }
+
+      .libseat-user-page uni-page-body {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow-y: auto !important;
+      }
+
+      .libseat-user-page .container {
+        padding-bottom: 120px !important;
+        overflow: visible !important;
+      }
+
+      .libseat-user-page .paging,
+      .libseat-user-page .zp-view-super,
+      .libseat-user-page .zp-scroll-view-super,
+      .libseat-user-page uni-scroll-view,
+      .libseat-user-page .uni-scroll-view,
+      .libseat-user-page .uni-scroll-view-content {
+        max-height: none !important;
+        overflow: visible !important;
       }
 
       .libseat-user-page uni-page-wrapper::after {
@@ -1977,11 +1998,10 @@
   }
 
   function reserveConfigDefaults() {
-    const today = todayText();
     const defaultEnd = minutesToTime(defaultEndMinutesForDate());
     return {
       manualSeat: "",
-      manualStart: minutesToTime(defaultStartMinutesForDate(today)),
+      manualStart: DAY_OPEN_TIME,
       manualEnd: defaultEnd,
       autoSeat: "",
       autoStart: minutesToTime(timeToMinutes(DAY_OPEN_TIME)),
@@ -5609,7 +5629,7 @@
     const defaultDate = defaultDateText();
     const dateValue = defaultDate;
     const defaultStart = defaultStartMinutesForDate(dateValue);
-    const manualDefaultStart = defaultStartMinutesForDate(today);
+    const manualDefaultStart = timeToMinutes(DAY_OPEN_TIME);
     const autoDefaultStart = timeToMinutes(DAY_OPEN_TIME);
     const defaultEnd = defaultEndMinutesForDate();
     const savedConfig = readReserveConfig();
